@@ -1,5 +1,8 @@
 let mesaSeleccionadaId = null; 
 
+const ADMIN_CIERRE_PASSWORD = '1234';
+const ADMIN_CIERRE_EXPIRATION_MS = 10 * 60 * 1000;
+
 const MINUTOS_OCULTAR_PAGADA = 1;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -13,10 +16,20 @@ document.addEventListener('DOMContentLoaded', () => {
     bindEventos();
   }
 
+  const mesasGrid = document.getElementById('mesasGrid');
+  if (mesasGrid) {
+    mesasGrid.addEventListener('click', handleMesaGridClick);
+  }
+
   const nombreGuardado = localStorage.getItem('bar_nombre_dispositivo');
   const headerNombre = document.getElementById('headerNombreDispositivo');
   if (headerNombre) {
     headerNombre.textContent = nombreGuardado || 'Sin nombre';
+  }
+
+  const botonCierre = document.getElementById('btnCierre');
+  if (botonCierre) {
+    botonCierre.addEventListener('click', abrirCierrePassword);
   }
 
 });
@@ -33,18 +46,9 @@ async function cargarMesas() {
 
 function renderizarMesas(mesas) {
   const grid = document.getElementById('mesasGrid');
+  const mesasVisibles = mesas.filter(mesa => mesa.ESTADO !== 'COBRADA');
 
-  const ahora = Date.now();
-  
-  const mesasVisibles = mesas.filter(mesa => {
-  if (mesa.ESTADO !== 'COBRADA') return true;
-  if (!mesa.fecha_cobro) return true;
-  const msCobro = new Date(mesa.fecha_cobro).getTime();
-  const minutosTranscurridos = (Date.now() - msCobro) / 60000;
-  return minutosTranscurridos < MINUTOS_OCULTAR_PAGADA;
-});
-
-  if (mesas.length === 0) {
+  if (mesasVisibles.length === 0) {
     grid.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🍽️</div>
@@ -54,7 +58,7 @@ function renderizarMesas(mesas) {
     return;
   }
 
-  grid.innerHTML = mesas.map(MESAS => {
+  grid.innerHTML = mesasVisibles.map(MESAS => {
     const claseMapa = {
       'DISPONIBLE': 'disponible',
       'OCUPADA':    'bloqueada',
@@ -62,37 +66,61 @@ function renderizarMesas(mesas) {
     };
     const claseCSS = claseMapa[MESAS.ESTADO] || 'disponible';
 
-const estadoLabel = {
-  'DISPONIBLE': '🟡 Disponible',
-  'OCUPADA':    '🔴 Ocupada',
-  'COBRADA':    '✅ Cobrada',
-}[MESAS.ESTADO] || MESAS.ESTADO;
+    const estadoLabel = {
+      'DISPONIBLE': '🟡 Disponible',
+      'OCUPADA':    '🔴 Ocupada',
+      'COBRADA':    '✅ Cobrada',
+    }[MESAS.ESTADO] || MESAS.ESTADO;
 
     const infoHtml = MESAS.ESTADO === 'OCUPADA'
       ? `<div class="camarero"><span>👤</span>${escHtml(MESAS.ABIERTO_POR)}</div>`
-      : MESAS.ESTADO === 'COBRADA'
-        ? '<div style="color:var(--success);font-size:12px;font-weight:700">Mesa cobrada</div>'
-        : '<div style="font-size:12px;color:var(--text-light)">Disponible</div>';
+      : '';
 
     const totalFormateado = parseFloat(MESAS.TOTAL || 0).toFixed(2).replace('.', ',');
     const numItems = parseInt(MESAS.NUM_ARTICULOS || MESAS.NUM_LINEAS || 0);
 
     return `
-      <div class="mesa-card ${claseCSS}"
-           data-id="${MESAS.MESA}"
-           data-estado="${MESAS.ESTADO}"
-           onclick="clicMesa(${MESAS.MESA}, '${MESAS.ESTADO}')">
+      <div class="mesa-card ${claseCSS}" data-id="${MESAS.MESA}" data-estado="${MESAS.ESTADO}">
         <div class="mesa-card-header">
           <div class="mesa-nombre">${escHtml(MESAS.NOMBRE)}</div>
           <span class="badge badge-${claseCSS}">${estadoLabel}</span>
         </div>
-        <div class="mesa-info">${infoHtml}</div>
-        <div class="mesa-total">
-          ${totalFormateado} €
+        ${infoHtml ? `<div class="mesa-info">${infoHtml}</div>` : ''}
+        <div class="mesa-card-meta">
+          <div class="mesa-total">${totalFormateado} €</div>
+          <div class="mesa-items">${numItems} artículos</div>
         </div>
-        <div class="mesa-items">${numItems} artículos</div>
       </div>`;
   }).join('');
+}
+
+function handleMesaGridClick(event) {
+  const card = event.target.closest('.mesa-card');
+  if (!card) return;
+
+  const estado = card.dataset.estado;
+  if (estado === 'OCUPADA') {
+    mostrarToast('Esta mesa ya está ocupada, no puedes entrar ahora.', 'warning');
+    return;
+  }
+
+  const mesaId = card.dataset.id;
+  if (!mesaId) return;
+
+  mesaSeleccionadaId = mesaId;
+  confirmarEntrarMesa();
+}
+
+function formatNumber(value) {
+  const n = Number(value);
+  if (Number.isNaN(n)) return '0';
+  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
+}
+
+function formatCurrency(value) {
+  const n = Number(value);
+  if (Number.isNaN(n)) return '0,00';
+  return n.toFixed(2).replace('.', ',');
 }
 
 function clicMesa(mesaId, estado) {
@@ -124,9 +152,23 @@ function bindEventos() {
     if (e.key === 'Enter') crearNuevaMesa();
   });
 
+  const btnNuevaMesaRapida = document.getElementById('btnNuevaMesaRapida');
+  if (btnNuevaMesaRapida) {
+    btnNuevaMesaRapida.addEventListener('click', crearNuevaMesaRapida);
+  }
+
   document.getElementById('btnConfirmarDispositivo').addEventListener('click', confirmarNombreDispositivo);
   document.getElementById('inputNombreDispositivo').addEventListener('keydown', e => {
     if (e.key === 'Enter') confirmarNombreDispositivo();
+  });
+
+  const btnCierre = document.getElementById('btnCierre');
+  if (btnCierre) btnCierre.addEventListener('click', abrirCierrePassword);
+
+  document.getElementById('btnCancelarCierre').addEventListener('click', () => cerrarModal('modalCierrePassword'));
+  document.getElementById('btnConfirmarCierre').addEventListener('click', confirmarCierrePassword);
+  document.getElementById('inputCierrePassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmarCierrePassword();
   });
 
   document.getElementById('btnCambiarDispositivo').addEventListener('click', () => {
@@ -138,7 +180,7 @@ function bindEventos() {
 
 }
 
-window.crearNuevaMesa = async function () {
+async function crearNuevaMesa() {
   const nombre = document.getElementById('inputNombreMesa').value.trim() || 'Mesa sin nombre';
   try {
     const data = await API.crearMesa(nombre);
@@ -146,7 +188,16 @@ window.crearNuevaMesa = async function () {
   } catch (err) {
     mostrarToast(err.message, 'error');
   }
-};
+}
+
+async function crearNuevaMesaRapida() {
+  try {
+    const data = await API.crearMesa('Mesa rápida');
+    window.location.href = `mesa.html?id=${data.mesa}&comanda=${data.comanda_id}&quick=1`;
+  } catch (err) {
+    mostrarToast(err.message, 'error');
+  }
+}
 
 async function confirmarEntrarMesa() {
   if (!mesaSeleccionadaId) return;
@@ -174,6 +225,23 @@ function confirmarNombreDispositivo() {
   if (headerNombre) headerNombre.textContent = nombre;
   cerrarModal('modalNombreDispositivo');
   mostrarToast(`Dispositivo guardado como "${nombre}"`, 'success');
+}
+
+function abrirCierrePassword() {
+  document.getElementById('inputCierrePassword').value = '';
+  abrirModal('modalCierrePassword');
+  setTimeout(() => document.getElementById('inputCierrePassword').focus(), 50);
+}
+
+function confirmarCierrePassword() {
+  const password = document.getElementById('inputCierrePassword').value.trim();
+  if (password !== ADMIN_CIERRE_PASSWORD) {
+    mostrarToast('Contraseña incorrecta', 'error');
+    return;
+  }
+  localStorage.setItem('bar_cierre_access', String(Date.now() + ADMIN_CIERRE_EXPIRATION_MS));
+  cerrarModal('modalCierrePassword');
+  window.open('cierre.html', '_blank', 'noopener');
 }
 
 function escHtml(str) {

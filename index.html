@@ -21,6 +21,7 @@
       <button class="btn btn-ghost" id="btnCambiarDispositivo">
        ✏️<span id="headerNombreDispositivo"></span>
       </button>
+      <button class="btn btn-danger btn-sm" id="btnCierre">Cierre</button>
     </div>
   </header>
 
@@ -30,6 +31,9 @@
       <div class="toolbar-actions">
         <button class="btn btn-primary" id="btnNuevaMesa">
           ➕ Nueva Mesa
+        </button>
+        <button class="btn btn-secondary" id="btnNuevaMesaRapida">
+          ⚡ Mesa rápida
         </button>
       </div>
     </div>
@@ -77,6 +81,27 @@
       <div class="modal-actions">
         <button class="btn btn-outline" id="btnCancelarCrear">Cancelar</button>
         <button class="btn btn-primary" id="btnConfirmarCrear">Crear Mesa</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalCierrePassword">
+    <div class="modal">
+      <h3>Acceso administrativo</h3>
+      <p class="modal-sub">Introduce la contraseña para abrir el cierre del día.</p>
+      <div class="form-group">
+        <label for="inputCierrePassword">Contraseña</label>
+        <input
+          type="password"
+          id="inputCierrePassword"
+          class="form-input"
+          placeholder="Contraseña de administrador"
+          autocomplete="current-password"
+        />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="btnCancelarCierre">Cancelar</button>
+        <button class="btn btn-danger" id="btnConfirmarCierre">Entrar</button>
       </div>
     </div>
   </div>

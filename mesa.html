@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="mesa-html">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mesa · Bar</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body class="mesa-page-body">
 
   <header class="header">
     <div class="header-logo">
@@ -45,6 +45,15 @@
     <div class="mesa-body">
 
       <div class="productos-panel">
+        <div class="productos-search" id="productosSearch" style="display:none">
+          <input
+            type="text"
+            id="busquedaNombre"
+            class="search-input"
+            placeholder="Buscar producto..."
+            autocomplete="off"
+          />
+        </div>
         <div class="categorias-tabs" id="categoriasTabs">
         </div>
         <div class="productos-lista" id="productosLista">
@@ -62,12 +71,6 @@
           </div>
         </div>
         <div class="pedido-footer">
-          <div class="pedido-total-row">
-            <span class="pedido-total-label">Total</span>
-            <span class="pedido-total-amount" id="pedidoTotal">
-              0,00 <span class="eur">€</span>
-            </span>
-          </div>
           <div class="pedido-actions">
             <button class="btn btn-success btn-lg" id="btnCobrar">✅ Cobrar mesa</button>
           </div>
@@ -77,11 +80,33 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalCobrarSeleccion">
+    <div class="modal">
+      <h3>¿Cómo quieres cobrar?</h3>
+      <p class="modal-sub">Elige cobrar toda la mesa o hacerlo por partes en la pantalla de cobro.</p>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="cerrarModal('modalCobrarSeleccion')">Cancelar</button>
+        <button class="btn btn-success" onclick="cobrarMesaCompleta()">Cobrar completa</button>
+        <button class="btn btn-primary" onclick="cobrarMesaPorPartes()">Cobrar por partes</button>
+      </div>
+    </div>
+  </div>
+
   <div class="loader-overlay" id="loader">
     <div class="spinner"></div>
   </div>
 
   <div class="toast-container" id="toastContainer"></div>
+
+  <div class="modal-overlay" id="modalTicket">
+    <div class="modal modal-ticket">
+      <div id="ticketContenido"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="cerrarTicket()">Cerrar</button>
+        <button class="btn btn-primary" onclick="imprimirTicket()">🖨️ Imprimir</button>
+      </div>
+    </div>
+  </div>
 
   <script src="api.js"></script>
   <script src="mesa.js"></script>

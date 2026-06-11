@@ -27,7 +27,7 @@
 
   <div id="vistaCobro" style="display:none" class="cobro-vista">
     <div class="cobro-top-bar">
-      <button class="btn btn-outline" onclick="volverMesas()">← Mesas</button>
+      <button class="btn btn-outline" onclick="volverAMesa()">← Mesas</button>
       <h2 id="cobroMesaNombre">–</h2>
       <div class="cobro-pte-badge">
         Pendiente: <strong id="cobroTotalPte">0,00 €</strong>
@@ -59,6 +59,10 @@
             💶 Cobrar selección
           </button>
           <button class="btn btn-outline btn-lg cobro-btn-accion"
+                  id="btnFacturar">
+            🧾 Facturar
+          </button>
+          <button class="btn btn-outline btn-lg cobro-btn-accion"
                   onclick="abrirDividir()">
             ➗ Dividir en partes
           </button>
@@ -75,6 +79,11 @@
     <div class="modal">
       <h3 id="modalConfirmarTitulo">Confirmar cobro</h3>
       <p class="modal-sub" id="modalConfirmarSub"></p>
+      <div style="display:flex;gap:12px;justify-content:center;margin-bottom:16px">
+        <button class="btn btn-sm btn-primary" id="btnPagoEfectivo" onclick="seleccionarMetodoPago('efectivo')">💵 Efectivo</button>
+        <button class="btn btn-sm btn-outline" id="btnPagoTarjeta" onclick="seleccionarMetodoPago('tarjeta')">💳 Tarjeta</button>
+      </div>
+      <div id="modalPagoAviso" style="display:none;text-align:center;color:#b71c1c;margin-bottom:12px;font-size:14px;">Pago con tarjeta en desarrollo. Por ahora usa efectivo.</div>
       <div style="text-align:center;margin:16px 0">
         <div id="modalImporte" style="font-family:var(--font-display);font-size:44px;font-weight:700;color:var(--brown-800)"></div>
       </div>
@@ -99,7 +108,7 @@
       </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="cerrarModal('modalDividir')">Cancelar</button>
-        <button class="btn btn-primary" onclick="cobrarParte()">💶 Cobrar una parte</button>
+        <button class="btn btn-primary" onclick="cobrarParte()">✔ Calcular</button>
       </div>
     </div>
   </div>

@@ -57,6 +57,13 @@ body {
   line-height: 1.55;
 }
 
+.mesa-html,
+body.mesa-page-body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior-y: none;
+}
+
 /* ─── SCROLLBAR ─────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--brown-50); }
@@ -228,6 +235,10 @@ body {
 .mesa-card.bloqueada::before  { background: linear-gradient(90deg, #e05c3a, #c94020); }
 .mesa-card.pagada::before     { background: linear-gradient(90deg, var(--success), #4CAF50); }
 
+.mesa-card {
+  cursor: pointer;
+}
+
 .mesa-card:hover {
   border-color: var(--brown-400);
   box-shadow: var(--shadow);
@@ -250,6 +261,116 @@ body {
   font-size: 20px;
   font-weight: 700;
   color: var(--brown-800);
+}
+
+.mesa-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.mesa-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.mesa-card-toggle {
+  padding: 8px 14px;
+  border-radius: 999px;
+}
+
+.mesa-card-details {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height .22s ease, opacity .22s ease, padding-top .22s ease;
+  border-top: 1px solid var(--border);
+  padding-top: 0;
+}
+
+.mesa-card.expanded .mesa-card-details {
+  max-height: 800px;
+  opacity: 1;
+  padding-top: 14px;
+}
+
+.mesa-details-loading,
+.mesa-details-empty,
+.mesa-details-error {
+  font-size: 14px;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
+.mesa-detail-group {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.mesa-detail-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brown-700);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.mesa-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.mesa-detail-row:first-child {
+  border-top: none;
+}
+
+.mesa-detail-item {
+  flex: 1 1 60%;
+  min-width: 0;
+  color: var(--brown-800);
+  font-size: 14px;
+}
+
+.mesa-detail-qty {
+  font-weight: 700;
+  margin-right: 6px;
+  color: var(--brown-600);
+}
+
+.mesa-detail-meta {
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.mesa-detail-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brown-500);
+  margin-left: 6px;
+}
+
+.mesa-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.mesa-card-open-button {
+  white-space: nowrap;
+}
+
+.mesa-card.expanded {
+  box-shadow: var(--shadow);
 }
 
 .badge {
@@ -304,7 +425,7 @@ body {
 .empty-state p  { font-size: 14px; }
 
 /* ─── PÁGINA DE MESA ────────────────────────────────────────── */
-.page-mesa { height: calc(100vh - 64px); display: flex; flex-direction: column; overflow: hidden; }
+.page-mesa { height: calc(100dvh - 64px); display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; }
 
 .mesa-header {
   background: var(--bg-card);
@@ -316,6 +437,10 @@ body {
   gap: 12px;
   flex-wrap: wrap;
   box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  flex-shrink: 0;
 }
 
 .mesa-header-left { 
@@ -410,6 +535,8 @@ body {
 .productos-lista {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
@@ -495,6 +622,8 @@ body {
 .pedido-lista {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -820,7 +949,26 @@ body {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+  flex-wrap: wrap;
   margin-top: 20px;
+}
+
+.modal-actions .btn {
+  min-width: 110px;
+}
+
+@media (max-width: 520px) {
+  .modal {
+    width: min(92vw, 420px);
+    padding: 22px 16px;
+  }
+  .modal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .modal-actions .btn {
+    width: 100%;
+  }
 }
 
 /* ─── LOADING / TOAST ───────────────────────────────────────── */
@@ -957,6 +1105,15 @@ body {
     border-bottom: 2px solid var(--border);
     background: var(--bg-card);
     flex-shrink: 0;
+    position: sticky;
+    top: 56px;
+    z-index: 80;
+  }
+
+  .mesa-header {
+    position: sticky;
+    top: 0;
+    z-index: 90;
   }
 
   .mesa-tab {
@@ -993,7 +1150,7 @@ body {
   }
 
   .page-mesa {
-    height: calc(100vh - 56px);
+    height: calc(100dvh - 56px);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1207,9 +1364,12 @@ body {
   color: var(--text-muted);
 }
 
+.estado-tag-pedido     { background: #FFEBEE; border-color: #E53935; color: #B71C1C; }
 .estado-tag-en-curso  { background: #FFF8E1; border-color: #F9A825; color: #8A6000; }
 .estado-tag-listo     { background: #E3F2FD; border-color: #1E88E5; color: #1A4A8A; }
 .estado-tag-servido   { background: var(--success-bg); border-color: var(--success); color: var(--success); }
+.estado-tag-pagado    { background: #E8F5E9; border-color: #43A047; color: #2E7D32; }
+.estado-tag-otro      { background: #F5F5F5; border-color: var(--border); color: var(--text-muted); }
 
 #pedidoActual, #pedidoAnterior {
   display: flex;

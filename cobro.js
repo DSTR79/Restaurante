@@ -1,10 +1,17 @@
 const params = new URLSearchParams(window.location.search);
 
 let mesaActiva = params.get('id') || null;
+let currentComandaId = null;
 let lineasCobro = [];
 let totalPte = 0;
 let accionPendiente = null;
 let numPartes = 2;
+let ticketQueue = [];
+let ticketReturnToMesas = false;
+let ticketReturnToIndex = false;
+let mesaCobrado = false;
+let reloadAfterTickets = false;
+let metodoPagoSeleccionado = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -19,11 +26,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           mesa.MESA,
           mesa.NOMBRE
         );
+      } else {
+        mostrarToast('Mesa no encontrada. Redirigiendo al inicio.', 'warning');
+        setTimeout(() => window.location.href = 'index.html', 1000);
       }
     }
     setInterval(cargarMesas, 10000);
   } catch (err) {
     mostrarToast('Error: ' + err.message, 'error');
+    if (mesaActiva) {
+      setTimeout(() => window.location.href = 'index.html', 1200);
+    }
   }
 });
 async function cargarMesas() {
@@ -40,7 +53,7 @@ async function cargarMesas() {
 function renderizarMesas(mesas) {
   const grid = document.getElementById('cobroMesasGrid');
 
-  const cobrable = mesas.filter(m => parseFloat(m.TOTAL_PTE) > 0 || m.ESTADO === 'COBRADA');
+  const cobrable = mesas.filter(m => parseFloat(m.TOTAL_PTE) > 0);
 
   if (!cobrable.length) {
     grid.innerHTML = `
@@ -72,7 +85,7 @@ function renderizarMesas(mesas) {
     }
 
     return `
-      <div class="cobro-mesa-card ${css}"
+      <div class="cobro-mesa-card ${css}" id="cobro-mesa-${m.MESA}" data-estado="${m.ESTADO}"
            onclick="entrarMesa(${m.MESA}, '${escHtml(m.NOMBRE)}')">
 
         <div class="cobro-mesa-nombre">${escHtml(m.NOMBRE)}</div>
@@ -92,7 +105,16 @@ function renderizarMesas(mesas) {
 }
 
 async function entrarMesa(id, nombre) {
+  const card = document.getElementById(`cobro-mesa-${id}`);
+  const estado = card?.dataset?.estado;
+  if (estado === 'OCUPADA') {
+    mostrarToast('Esta mesa está ocupada, no puedes entrar ahora.', 'warning');
+    return;
+  }
+
   mesaActiva = id;
+  mesaCobrado = false;
+  ticketReturnToMesas = false;
 
   document.getElementById('cobroMesaNombre').textContent = nombre;
 
@@ -105,6 +127,7 @@ async function entrarMesa(id, nombre) {
 
     lineasCobro = data.lineas;
     totalPte = parseFloat(data.total_pte || 0);
+    currentComandaId = data.comanda_id || null;
 
     renderizarCobro();
 
@@ -119,8 +142,8 @@ async function entrarMesa(id, nombre) {
   }
 }
 
-async function volverMesas() {
-  if (mesaActiva) {
+async function volverMesas(skipEstado = false) {
+  if (mesaActiva && !skipEstado && !mesaCobrado) {
     try {
       await API.estadoMesa(mesaActiva, 'DISPONIBLE');
     } catch (err) {
@@ -134,6 +157,18 @@ async function volverMesas() {
   document.getElementById('vistasMesas').style.display = 'block';
 
   cargarMesas();
+}
+
+async function volverAMesa() {
+  // Liberar la mesa y redirigir al index
+  if (mesaActiva && !mesaCobrado) {
+    try {
+      await API.estadoMesa(mesaActiva, 'DISPONIBLE');
+    } catch (err) {
+      mostrarToast('No se pudo liberar la mesa: ' + err.message, 'error');
+    }
+  }
+  window.location.href = 'index.html';
 }
 
 function renderizarCobro() {
@@ -158,31 +193,67 @@ function renderizarCobro() {
     return;
   }
 
-  container.innerHTML = lineasCobro.map(l => `
-    <div class="cobro-articulo-row" id="cobart-${l.producto_id}">
+  const pendientes = [];
+  const cobradas = [];
 
-      <div class="cobro-art-info">
-        <div class="cobro-art-nombre">${escHtml(l.producto_nombre)}</div>
-        <div class="cobro-art-precio">
-          ${parseFloat(l.precio_unitario).toFixed(2).replace('.', ',')} €
+  lineasCobro.forEach(l => {
+    const pendiente = parseInt(l.cantidad_total) || 0;
+    const pagada = parseInt(l.cantidad_pagada) || 0;
+    const estaCobrada = pendiente === 0 && pagada > 0;
+
+    if (estaCobrada) {
+      cobradas.push(`
+        <div class="cobro-articulo-row pagada" id="cobart-${l.producto_id}">
+          <div class="cobro-art-info">
+            <div class="cobro-art-nombre">${escHtml(l.producto_nombre)}</div>
+            <div class="cobro-art-meta">
+              <span class="cobro-art-tag">Cobrado: ${pagada}</span>
+            </div>
+          </div>
+          <div class="cobro-art-total">${(pagada * parseFloat(l.precio_unitario)).toFixed(2).replace('.', ',')} €</div>
         </div>
-      </div>
-
-      <div class="cobro-art-qty-ctrl">
-        <button class="qty-btn minus" onclick="cambiarCobroQty(${l.producto_id}, -1, ${parseInt(l.cantidad_total)}, ${parseFloat(l.precio_unitario)})">−</button>
-
-        <div class="cobro-qty-display">
-          <span id="cobroqty-${l.producto_id}">0</span>
-          <span class="cobro-qty-max">/ ${parseInt(l.cantidad_total)}</span>
+      `);
+    } else {
+      pendientes.push(`
+        <div class="cobro-articulo-row" id="cobart-${l.producto_id}">
+          <div class="cobro-art-info">
+            <div class="cobro-art-nombre">${escHtml(l.producto_nombre)}</div>
+            <div class="cobro-art-precio">
+              ${parseFloat(l.precio_unitario).toFixed(2).replace('.', ',')} €
+            </div>
+            <div class="cobro-art-meta">
+              <span>${pendiente} pendiente</span>
+              ${pagada ? `<span class="cobro-art-tag">Cobrado: ${pagada}</span>` : ''}
+            </div>
+          </div>
+          <div class="cobro-art-qty-ctrl">
+            <button class="qty-btn minus" onclick="cambiarCobroQty(${l.producto_id}, -1, ${pendiente}, ${parseFloat(l.precio_unitario)})">−</button>
+            <div class="cobro-qty-display">
+              <span id="cobroqty-${l.producto_id}">0</span>
+              <span class="cobro-qty-max">/ ${pendiente}</span>
+            </div>
+            <button class="qty-btn plus" onclick="cambiarCobroQty(${l.producto_id}, 1, ${pendiente}, ${parseFloat(l.precio_unitario)})">+</button>
+          </div>
+          <div id="cobrosub-${l.producto_id}" class="cobro-art-subtotal">0,00 €</div>
         </div>
+      `);
+    }
+  });
 
-        <button class="qty-btn plus" onclick="cambiarCobroQty(${l.producto_id}, 1, ${parseInt(l.cantidad_total)}, ${parseFloat(l.precio_unitario)})">+</button>
+  container.innerHTML = `
+    ${pendientes.length > 0 ? `
+      <div class="cobro-group">
+        <div class="cobro-group-title">Artículos pendientes</div>
+        ${pendientes.join('')}
       </div>
-
-      <div id="cobrosub-${l.producto_id}">0,00 €</div>
-
-    </div>
-  `).join('');
+    ` : ''}
+    ${cobradas.length > 0 ? `
+      <div class="cobro-group">
+        <div class="cobro-group-title">Artículos cobrados</div>
+        ${cobradas.join('')}
+      </div>
+    ` : ''}
+  `;
 }
 
 function cambiarCobroQty(productoId, delta, max, precio) {
@@ -221,9 +292,16 @@ function recalcularSel() {
 
 function abrirConfirmar(tipo) {
   accionPendiente = tipo;
+  metodoPagoSeleccionado = 'efectivo';
+
+  document.getElementById('btnPagoEfectivo').classList.add('btn-primary');
+  document.getElementById('btnPagoEfectivo').classList.remove('btn-outline');
+  document.getElementById('btnPagoTarjeta').classList.add('btn-outline');
+  document.getElementById('btnPagoTarjeta').classList.remove('btn-primary');
+  document.getElementById('modalPagoAviso').style.display = 'none';
+  document.getElementById('btnConfirmarCobro').disabled = false;
 
   const esTodo = tipo === 'todo';
-
   const importe = esTodo
     ? totalPte
     : parseFloat(document.getElementById('resumenSel').textContent.replace(',', '.').replace(/[^0-9.]/g, ''));
@@ -235,8 +313,32 @@ function abrirConfirmar(tipo) {
     importe.toFixed(2).replace('.', ',') + ' €';
 
   document.getElementById('btnConfirmarCobro').onclick = ejecutarCobro;
-
   abrirModal('modalConfirmar');
+}
+
+function seleccionarMetodoPago(metodo) {
+  metodoPagoSeleccionado = metodo;
+
+  const btnEfectivo = document.getElementById('btnPagoEfectivo');
+  const btnTarjeta = document.getElementById('btnPagoTarjeta');
+  const aviso = document.getElementById('modalPagoAviso');
+  const btnConfirmar = document.getElementById('btnConfirmarCobro');
+
+  if (metodo === 'efectivo') {
+    btnEfectivo.classList.add('btn-primary');
+    btnEfectivo.classList.remove('btn-outline');
+    btnTarjeta.classList.add('btn-outline');
+    btnTarjeta.classList.remove('btn-primary');
+    aviso.style.display = 'none';
+    btnConfirmar.disabled = false;
+  } else {
+    btnTarjeta.classList.remove('btn-outline');
+    btnTarjeta.classList.add('btn-primary');
+    btnEfectivo.classList.add('btn-outline');
+    btnEfectivo.classList.remove('btn-primary');
+    aviso.style.display = 'block';
+    btnConfirmar.disabled = true;
+  }
 }
 
 function abrirDividir() {
@@ -257,25 +359,67 @@ function actualizarDividir() {
     (totalPte / numPartes).toFixed(2).replace('.', ',') + ' €';
 }
 
-async function cobrarParte() {
-  cerrarModal('modalDividir');
+function cobrarParte() {
+  if (totalPte <= 0) {
+    mostrarToast('No hay importe pendiente para dividir.', 'info');
+    return;
+  }
 
   const importe = totalPte / numPartes;
+  document.getElementById('importeParte').textContent =
+    importe.toFixed(2).replace('.', ',') + ' €';
 
-  setLoader(true);
+  mostrarToast(`Cada parte: ${importe.toFixed(2).replace('.', ',')} €`, 'success');
+  cerrarModal('modalDividir');
+}
 
+async function liberarMesaCobro() {
+  if (!mesaActiva) return;
   try {
-    await API.cobrarMesa(mesaActiva, [], importe, false);
-    mostrarToast(`Cobrado 1/${numPartes}`, 'success');
-    await entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
+    await API.estadoMesa(mesaActiva, 'DISPONIBLE');
   } catch (err) {
-    mostrarToast(err.message, 'error');
-  } finally {
-    setLoader(false);
+    console.warn('No se pudo liberar la mesa:', err.message);
   }
 }
 
+function liberarMesaCobroSync() {
+  if (!mesaActiva) return;
+
+  const payload = JSON.stringify({ id: mesaActiva, estado: 'DISPONIBLE' });
+
+  if (navigator.sendBeacon) {
+    try {
+      const blob = new Blob([payload], { type: 'application/json' });
+      navigator.sendBeacon('api/mesas.php?action=estado', blob);
+      return;
+    } catch (error) {
+      // fallback to fetch
+    }
+  }
+
+  fetch('api/mesas.php?action=estado', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    keepalive: true
+  }).catch(() => {});
+}
+
+function handleCobroUnload() {
+  if (mesaActiva && !mesaCobrado) {
+    liberarMesaCobroSync();
+  }
+}
+
+window.addEventListener('beforeunload', handleCobroUnload);
+window.addEventListener('pagehide', handleCobroUnload);
+
 async function ejecutarCobro() {
+  if (metodoPagoSeleccionado === 'tarjeta') {
+    mostrarToast('Pago con tarjeta en desarrollo. Usa efectivo por ahora.', 'warning');
+    return;
+  }
+
   cerrarModal('modalConfirmar');
   setLoader(true);
   try {
@@ -284,11 +428,36 @@ async function ejecutarCobro() {
       accionPendiente === 'todo' ? 0 : obtenerTotalSeleccionado(),
       accionPendiente === 'todo'
     );
-    if (res.ticket) mostrarTicket(res.ticket);
-    else {
+
+    ticketQueue = [];
+    const mesaCobrada = res.mesa_cobrada === true;
+    ticketReturnToMesas = mesaCobrada;
+    ticketReturnToIndex = !mesaCobrada && accionPendiente !== 'todo';
+    mesaCobrado = mesaCobrada;
+    reloadAfterTickets = accionPendiente === 'todo';
+    if (res.ticket) ticketQueue.push(res.ticket);
+    if (res.ticket_completo) {
+      ticketQueue.push(res.ticket_completo);
+    }
+
+    if (ticketQueue.length) {
+      procesarTicketQueue();
+    } else {
+      if (reloadAfterTickets) {
+        window.location.reload();
+        return;
+      }
+      if (ticketReturnToIndex) {
+        await liberarMesaCobro();
+        window.location.href = 'index.html';
+        return;
+      }
       mostrarToast('Cobro registrado', 'success');
-      if (accionPendiente === 'todo') setTimeout(volverMesas, 1200);
-      else await entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
+      if (mesaCobrada) {
+        setTimeout(() => volverMesas(true), 1200);
+      } else {
+        await entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
+      }
     }
   } catch (err) { mostrarToast('Error: ' + err.message, 'error'); }
   finally { setLoader(false); }
@@ -308,7 +477,7 @@ function obtenerTotalSeleccionado() {
   return parseFloat(document.getElementById('resumenSel').textContent.replace(',', '.').replace(/[^0-9.]/g, '')) || 0;
 }
 
-function mostrarTicket(ticket) {
+function buildTicketHtml(ticket) {
   const nombre = localStorage.getItem('bar_nombre') || 'MI BAR';
   const lineas = ticket.lineas.map(l => `
     <tr>
@@ -318,11 +487,13 @@ function mostrarTicket(ticket) {
       <td style="text-align:right">${parseFloat(l.subtotal).toFixed(2).replace('.', ',')} €</td>
     </tr>`).join('');
 
-  const html = `
+  return `
     <div class="ticket-wrap">
       <div class="ticket-nombre-bar">${escHtml(nombre)}</div>
       <div class="ticket-fecha">${ticket.fecha}</div>
       <div class="ticket-mesa">Mesa: ${escHtml(ticket.mesa)}</div>
+      <div class="ticket-sep">────────────────────</div>
+      <div class="ticket-titulo">${escHtml(ticket.titulo || 'Ticket')}</div>
       <div class="ticket-sep">────────────────────</div>
       <table class="ticket-tabla">
         <thead>
@@ -339,18 +510,76 @@ function mostrarTicket(ticket) {
       <div class="ticket-total">TOTAL: ${parseFloat(ticket.total).toFixed(2).replace('.', ',')} €</div>
       <div class="ticket-gracias">¡Gracias por su visita!</div>
     </div>`;
+}
 
+function mostrarTicket(ticket, autoPrint = false) {
+  if (!ticket) return;
+  const html = buildTicketHtml(ticket);
   document.getElementById('ticketContenido').innerHTML = html;
+
+  if (autoPrint) {
+    imprimirTicket(true);
+    return;
+  }
+
   abrirModal('modalTicket');
 }
 
-function cerrarTicket() {
-  cerrarModal('modalTicket');
-  if (accionPendiente === 'todo') volverMesas();
-  else entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
+function procesarTicketQueue() {
+  if (!ticketQueue.length) {
+    ticketQueue = [];
+    if (reloadAfterTickets) {
+      reloadAfterTickets = false;
+      window.location.reload();
+      return;
+    }
+    if (ticketReturnToIndex) {
+      ticketReturnToIndex = false;
+      liberarMesaCobro().finally(() => {
+        window.location.href = 'index.html';
+      });
+      return;
+    }
+    if (ticketReturnToMesas || mesaCobrado) {
+      ticketReturnToMesas = false;
+      mesaCobrado = false;
+      volverMesas(true);
+    } else {
+      entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
+    }
+    return;
+  }
+
+  const ticket = ticketQueue.shift();
+  mostrarTicket(ticket, true);
 }
 
-function imprimirTicket() {
+function cerrarTicket() {
+  if (ticketQueue.length) {
+    mostrarTicket(ticketQueue.shift());
+    return;
+  }
+
+  ticketQueue = [];
+  cerrarModal('modalTicket');
+
+  if (ticketReturnToIndex) {
+    ticketReturnToIndex = false;
+    liberarMesaCobro().finally(() => {
+      window.location.href = 'index.html';
+    });
+    return;
+  }
+  if (ticketReturnToMesas || mesaCobrado) {
+    ticketReturnToMesas = false;
+    mesaCobrado = false;
+    volverMesas(true);
+  } else {
+    entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
+  }
+}
+
+function imprimirTicket(auto = false) {
   const contenido = document.getElementById('ticketContenido').innerHTML;
   const ventana   = window.open('', '_blank', 'width=400,height=600');
   ventana.document.write(`
@@ -372,7 +601,14 @@ function imprimirTicket() {
   `);
   ventana.document.close();
   ventana.focus();
-  setTimeout(() => { ventana.print(); ventana.close(); }, 300);
+
+  setTimeout(() => {
+    ventana.print();
+    if (auto) {
+      ventana.close();
+      setTimeout(() => procesarTicketQueue(), 500);
+    }
+  }, 300);
 }
 
 function escHtml(str) {

@@ -24,6 +24,8 @@ const API = {
   getMesas() { return this._fetch(`${this.base}api/mesas_resumen.php`); },
   getDetalleMesa(id){ return this._fetch(`${this.base}api/mesas.php?action=detalle&id=${id}`); },
   getLineasCobro(id){ return this._fetch(`${this.base}api/mesas.php?action=lineas_cobro&id=${id}`); },
+  getCierreData() { return this._fetch(`${this.base}api/cierre.php?action=datos`); },
+  cerrarDia() { return this.post('api/cierre.php?action=cerrar', {}); },
 
   crearMesa(nombre) { return this.post('api/mesas.php?action=crear', { nombre }); },
   entrarMesa(id)    { return this.post('api/mesas.php?action=entrar', { id, camarero: obtenerNombreDispositivo() || 'Sin nombre' }); },

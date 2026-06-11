@@ -134,6 +134,7 @@
   background: var(--bg-card);
   border-bottom: 1.5px solid var(--border);
   box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
 }
 
 .cobro-top-bar h2 {
@@ -163,6 +164,19 @@
   overflow-y: auto;
   padding: 20px;
   border-right: 1.5px solid var(--border);
+}
+
+.cobro-group {
+  margin-bottom: 20px;
+}
+
+.cobro-group-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--brown-600);
+  margin-bottom: 10px;
 }
 
 .cobro-section-title {
@@ -207,12 +221,34 @@
   font-weight: 700;
   color: var(--brown-800);
   line-height: 1.2;
+  word-break: break-word;
 }
 
 .cobro-art-precio {
   font-size: 12px;
   color: var(--text-light);
   margin-top: 2px;
+}
+
+.cobro-art-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cobro-art-tag {
+  background: #e7f5e8;
+  color: #2d7a34;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.cobro-articulo-row.pagada {
+  opacity: .75;
+  background: #f8f5f2;
 }
 
 /* =========================
@@ -232,7 +268,8 @@
 }
 
 /* BOTONES */
-.cobro-qty-btn {
+.cobro-qty-btn,
+.qty-btn {
   width: 42px;
   height: 42px;
 
@@ -254,7 +291,8 @@
   transition: all .15s;
 }
 
-.cobro-qty-btn:hover {
+.cobro-qty-btn:hover,
+.qty-btn:hover {
   background: var(--brown-800);
   transform: scale(1.05);
 }
@@ -277,7 +315,8 @@
 }
 
 /* subtotal */
-.cobro-art-subtotal {
+.cobro-art-subtotal,
+.cobro-art-total {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 18px;
@@ -296,6 +335,7 @@
   padding: 20px;
   gap: 16px;
   background: var(--bg-card);
+  min-height: 220px;
 }
 
 /* resumen */
@@ -360,6 +400,7 @@
     background: white;
     border-top: 1px solid #eee;
     box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
+    padding: 16px 14px 18px;
   }
 
   .cobro-botones {
