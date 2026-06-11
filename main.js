@@ -21,10 +21,16 @@ document.addEventListener('DOMContentLoaded', () => {
     mesasGrid.addEventListener('click', handleMesaGridClick);
   }
 
-  const nombreGuardado = localStorage.getItem('bar_nombre_dispositivo');
   const headerNombre = document.getElementById('headerNombreDispositivo');
   if (headerNombre) {
-    headerNombre.textContent = nombreGuardado || 'Sin nombre';
+    headerNombre.textContent = obtenerNombreDispositivo() || 'Sin nombre';
+    cargarNombreDispositivoPorIP()
+      .then(nombre => {
+        headerNombre.textContent = nombre || 'Sin nombre';
+      })
+      .catch(err => {
+        console.warn('No se pudo cargar el dispositivo por IP:', err);
+      });
   }
 
   const botonCierre = document.getElementById('btnCierre');

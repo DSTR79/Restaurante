@@ -40,4 +40,62 @@ function verificarToken($pdo, $mesaId) {
 function generarToken() {
     return bin2hex(random_bytes(32));
 }
+
+function obtenerIPCliente() {
+    $headers = [
+        'HTTP_CLIENT_IP',
+        'HTTP_X_FORWARDED_FOR',
+        'REMOTE_ADDR',
+    ];
+
+    foreach ($headers as $header) {
+        if (empty($_SERVER[$header])) {
+            continue;
+        }
+
+        $ip = trim(explode(',', $_SERVER[$header])[0]);
+        if (filter_var($ip, FILTER_VALIDATE_IP)) {
+            return $ip;
+        }
+    }
+
+    return '';
+}
+
+function obtenerNombreUsuarioPorIP() {
+    global $pdo;
+
+    $ip = obtenerIPCliente();
+    if ($ip === '') {
+        return 'Sin identificar';
+    }
+
+    try {
+        $stmt = $pdo->prepare('SELECT nombre_usuario FROM ip_usuarios WHERE ip_address = ?');
+        $stmt->execute([$ip]);
+        $result = $stmt->fetch();
+
+        return $result ? $result['nombre_usuario'] : 'Sin identificar';
+    } catch (Throwable $e) {
+        error_log('Error en obtenerNombreUsuarioPorIP: ' . $e->getMessage());
+        return 'Sin identificar';
+    }
+}
+
+function crearTablaIPUsuarios() {
+    global $pdo;
+
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS ip_usuarios (
+                ip_address VARCHAR(45) PRIMARY KEY,
+                nombre_usuario VARCHAR(100) NOT NULL
+            ) CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (Throwable $e) {
+        error_log('Error creando tabla ip_usuarios: ' . $e->getMessage());
+    }
+}
+
+crearTablaIPUsuarios();
 ?>

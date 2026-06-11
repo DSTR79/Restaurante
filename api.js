@@ -25,6 +25,7 @@ const API = {
   getDetalleMesa(id){ return this._fetch(`${this.base}api/mesas.php?action=detalle&id=${id}`); },
   getLineasCobro(id){ return this._fetch(`${this.base}api/mesas.php?action=lineas_cobro&id=${id}`); },
   getCierreData() { return this._fetch(`${this.base}api/cierre.php?action=datos`); },
+  getDispositivo() { return this._fetch(`${this.base}api/dispositivo.php`); },
   cerrarDia() { return this.post('api/cierre.php?action=cerrar', {}); },
 
   crearMesa(nombre) { return this.post('api/mesas.php?action=crear', { nombre }); },
@@ -53,6 +54,18 @@ const API = {
 
 function obtenerNombreDispositivo() {
   return localStorage.getItem('bar_nombre_dispositivo') || null;
+}
+
+async function cargarNombreDispositivoPorIP() {
+  const data = await API.getDispositivo();
+  const nombre = (data.nombre || '').trim();
+
+  if (nombre && nombre !== 'Sin identificar') {
+    localStorage.setItem('bar_nombre_dispositivo', nombre);
+    return nombre;
+  }
+
+  return obtenerNombreDispositivo();
 }
 
 function iniciarReloj(elId) {
