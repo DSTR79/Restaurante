@@ -5,7 +5,17 @@ const ADMIN_CIERRE_EXPIRATION_MS = 10 * 60 * 1000;
 
 const MINUTOS_OCULTAR_PAGADA = 1;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const headerNombre = document.getElementById('headerNombreDispositivo');
+  if (headerNombre) headerNombre.textContent = 'Comprobando...';
+
+  try {
+    const nombre = await cargarNombreDispositivoPorIP();
+    if (headerNombre) headerNombre.textContent = nombre;
+  } catch (err) {
+    mostrarBloqueoAcceso(err.message);
+    return;
+  }
 
   if (typeof cargarMesas === 'function') {
     cargarMesas();
@@ -19,18 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const mesasGrid = document.getElementById('mesasGrid');
   if (mesasGrid) {
     mesasGrid.addEventListener('click', handleMesaGridClick);
-  }
-
-  const headerNombre = document.getElementById('headerNombreDispositivo');
-  if (headerNombre) {
-    headerNombre.textContent = obtenerNombreDispositivo() || 'Sin nombre';
-    cargarNombreDispositivoPorIP()
-      .then(nombre => {
-        headerNombre.textContent = nombre || 'Sin nombre';
-      })
-      .catch(err => {
-        console.warn('No se pudo cargar el dispositivo por IP:', err);
-      });
   }
 
   const botonCierre = document.getElementById('btnCierre');
@@ -163,11 +161,6 @@ function bindEventos() {
     btnNuevaMesaRapida.addEventListener('click', crearNuevaMesaRapida);
   }
 
-  document.getElementById('btnConfirmarDispositivo').addEventListener('click', confirmarNombreDispositivo);
-  document.getElementById('inputNombreDispositivo').addEventListener('keydown', e => {
-    if (e.key === 'Enter') confirmarNombreDispositivo();
-  });
-
   const btnCierre = document.getElementById('btnCierre');
   if (btnCierre) btnCierre.addEventListener('click', abrirCierrePassword);
 
@@ -175,13 +168,6 @@ function bindEventos() {
   document.getElementById('btnConfirmarCierre').addEventListener('click', confirmarCierrePassword);
   document.getElementById('inputCierrePassword').addEventListener('keydown', e => {
     if (e.key === 'Enter') confirmarCierrePassword();
-  });
-
-  document.getElementById('btnCambiarDispositivo').addEventListener('click', () => {
-    const actual = localStorage.getItem('bar_nombre_dispositivo') || '';
-    document.getElementById('inputNombreDispositivo').value = actual;
-    abrirModal('modalNombreDispositivo');
-    setTimeout(() => document.getElementById('inputNombreDispositivo').focus(), 50);
   });
 
 }
@@ -219,20 +205,6 @@ async function confirmarEntrarMesa() {
   }
 }
 
-function confirmarNombreDispositivo() {
-  const nombre = document.getElementById('inputNombreDispositivo').value.trim();
-  if (!nombre) {
-    mostrarToast('Introduce un nombre para este dispositivo.', 'warning');
-    document.getElementById('inputNombreDispositivo').focus();
-    return;
-  }
-  localStorage.setItem('bar_nombre_dispositivo', nombre);
-  const headerNombre = document.getElementById('headerNombreDispositivo');
-  if (headerNombre) headerNombre.textContent = nombre;
-  cerrarModal('modalNombreDispositivo');
-  mostrarToast(`Dispositivo guardado como "${nombre}"`, 'success');
-}
-
 function abrirCierrePassword() {
   document.getElementById('inputCierrePassword').value = '';
   abrirModal('modalCierrePassword');
@@ -257,4 +229,24 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function mostrarBloqueoAcceso(mensaje) {
+  const main = document.querySelector('main');
+  const headerNombre = document.getElementById('headerNombreDispositivo');
+  const acciones = document.querySelectorAll('button');
+
+  if (headerNombre) headerNombre.textContent = 'IP no registrada';
+  acciones.forEach(btn => {
+    btn.disabled = true;
+  });
+
+  if (main) {
+    main.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">!</div>
+        <h3>Acceso denegado</h3>
+        <p>${escHtml(mensaje || 'Esta IP no está registrada en la base de datos.')}</p>
+      </div>`;
+  }
 }

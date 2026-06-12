@@ -71,7 +71,7 @@ function obtenerNombreUsuarioPorIP() {
     }
 
     try {
-        $stmt = $pdo->prepare('SELECT nombre_usuario FROM ip_usuarios WHERE ip_address = ?');
+        $stmt = $pdo->prepare('SELECT nombre_usuario FROM ip_usuarios WHERE TRIM(ip_address) = ?');
         $stmt->execute([$ip]);
         $result = $stmt->fetch();
 
@@ -80,6 +80,41 @@ function obtenerNombreUsuarioPorIP() {
         error_log('Error en obtenerNombreUsuarioPorIP: ' . $e->getMessage());
         return 'Sin identificar';
     }
+}
+
+function obtenerUsuarioRegistradoPorIP() {
+    global $pdo;
+
+    $ip = obtenerIPCliente();
+    if ($ip === '') {
+        return null;
+    }
+
+    try {
+        $stmt = $pdo->prepare('SELECT ip_address, nombre_usuario FROM ip_usuarios WHERE TRIM(ip_address) = ?');
+        $stmt->execute([$ip]);
+        $result = $stmt->fetch();
+
+        return $result ?: null;
+    } catch (Throwable $e) {
+        error_log('Error en obtenerUsuarioRegistradoPorIP: ' . $e->getMessage());
+        return null;
+    }
+}
+
+function exigirUsuarioRegistrado() {
+    $usuario = obtenerUsuarioRegistradoPorIP();
+
+    if ($usuario) {
+        return $usuario;
+    }
+
+    http_response_code(403);
+    echo json_encode([
+        'error' => 'Acceso denegado: esta IP no está registrada.',
+        'ip' => obtenerIPCliente(),
+    ]);
+    exit;
 }
 
 function crearTablaIPUsuarios() {
@@ -98,4 +133,8 @@ function crearTablaIPUsuarios() {
 }
 
 crearTablaIPUsuarios();
+
+if (basename($_SERVER['SCRIPT_NAME'] ?? '') !== 'dispositivo.php') {
+    exigirUsuarioRegistrado();
+}
 ?>

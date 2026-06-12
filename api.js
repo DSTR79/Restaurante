@@ -29,7 +29,7 @@ const API = {
   cerrarDia() { return this.post('api/cierre.php?action=cerrar', {}); },
 
   crearMesa(nombre) { return this.post('api/mesas.php?action=crear', { nombre }); },
-  entrarMesa(id)    { return this.post('api/mesas.php?action=entrar', { id, camarero: obtenerNombreDispositivo() || 'Sin nombre' }); },
+  entrarMesa(id)    { return this.post('api/mesas.php?action=entrar', { id }); },
   guardarYSalir(id, comanda)         { return this.post('api/mesas.php?action=guardar', { id, comanda }); },
   borrarLineasCanceladas(id, comanda){ return this.post('api/mesas.php?action=salir', { id, comanda }); },
   actualizarLinea(id, producto_id, cantidad, comanda_id) {
@@ -52,20 +52,22 @@ const API = {
   },
 };
 
+let nombreDispositivoActual = null;
+
 function obtenerNombreDispositivo() {
-  return localStorage.getItem('bar_nombre_dispositivo') || null;
+  return nombreDispositivoActual;
 }
 
 async function cargarNombreDispositivoPorIP() {
   const data = await API.getDispositivo();
   const nombre = (data.nombre || '').trim();
 
-  if (nombre && nombre !== 'Sin identificar') {
-    localStorage.setItem('bar_nombre_dispositivo', nombre);
-    return nombre;
+  if (!data.autorizado || !nombre || nombre === 'Sin identificar') {
+    throw new Error(data.error || 'Esta IP no está registrada.');
   }
 
-  return obtenerNombreDispositivo();
+  nombreDispositivoActual = nombre;
+  return nombre;
 }
 
 function iniciarReloj(elId) {

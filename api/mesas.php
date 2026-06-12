@@ -114,7 +114,7 @@ function entrarMesa() {
     $body = getJsonBody();
 
     $id = $body['id'] ?? '';
-    $camarero = trim($body['camarero'] ?? 'Sin nombre');
+    $camarero = obtenerNombreUsuarioPorIP();
 
     if (!$id) {
         sendError('El ID de la mesa es obligatorio', 400);

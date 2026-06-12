@@ -3,24 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bar · Gestión de Mesas</title>
+  <title>Bar - Gestion de Mesas</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
   <header class="header">
     <div class="header-logo">
-      <span class="icon">🍺</span>
+      <span class="icon">BAR</span>
       <div>
         <h1>BAR</h1>
-        <div class="subtitle">GESTIÓN</div>
+        <div class="subtitle">GESTION</div>
       </div>
     </div>
     <div class="header-right">
       <div class="header-clock" id="reloj"></div>
-      <button class="btn btn-ghost" id="btnCambiarDispositivo">
-       ✏️<span id="headerNombreDispositivo"></span>
-      </button>
+      <div class="btn btn-ghost" id="headerNombreDispositivo"></div>
       <button class="btn btn-danger btn-sm" id="btnCierre">Cierre</button>
     </div>
   </header>
@@ -30,10 +28,10 @@
       <h2>Mesas activas</h2>
       <div class="toolbar-actions">
         <button class="btn btn-primary" id="btnNuevaMesa">
-          ➕ Nueva Mesa
+          Nueva Mesa
         </button>
         <button class="btn btn-secondary" id="btnNuevaMesaRapida">
-          ⚡ Mesa rápida
+          Mesa rapida
         </button>
       </div>
     </div>
@@ -42,33 +40,12 @@
     </div>
   </main>
 
-  <div class="modal-overlay" id="modalNombreDispositivo">
-    <div class="modal">
-      <h3>Trabajador:</h3>
-      <p class="modal-sub">Aparecerá cuando estés atendiendo una mesa.</p>
-      <div class="form-group">
-        <label for="inputNombreDispositivo">Nombre</label>
-        <input
-          type="text"
-          id="inputNombreDispositivo"
-          class="form-input"
-          placeholder="Ej: Juan Pérez, María García..."
-          maxlength="60"
-          autocomplete="off"
-        />
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-primary" id="btnConfirmarDispositivo">Guardar</button>
-      </div>
-    </div>
-  </div>
-
   <div class="modal-overlay" id="modalCrearMesa">
     <div class="modal">
-      <h3>➕ Nueva Mesa</h3>
-      <p class="modal-sub">Introduce el nombre o número para identificar la mesa.</p>
+      <h3>Nueva Mesa</h3>
+      <p class="modal-sub">Introduce el nombre o numero para identificar la mesa.</p>
       <div class="form-group">
-        <label for="inputNombreMesa">Nombre o número de mesa</label>
+        <label for="inputNombreMesa">Nombre o numero de mesa</label>
         <input
           type="text"
           id="inputNombreMesa"
@@ -88,14 +65,14 @@
   <div class="modal-overlay" id="modalCierrePassword">
     <div class="modal">
       <h3>Acceso administrativo</h3>
-      <p class="modal-sub">Introduce la contraseña para abrir el cierre del día.</p>
+      <p class="modal-sub">Introduce la contrasena para abrir el cierre del dia.</p>
       <div class="form-group">
-        <label for="inputCierrePassword">Contraseña</label>
+        <label for="inputCierrePassword">Contrasena</label>
         <input
           type="password"
           id="inputCierrePassword"
           class="form-input"
-          placeholder="Contraseña de administrador"
+          placeholder="Contrasena de administrador"
           autocomplete="current-password"
         />
       </div>
