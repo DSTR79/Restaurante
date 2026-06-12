@@ -6,7 +6,11 @@ const API = {
     const text = await res.text();
     try {
       const data = JSON.parse(text);
-      if (!res.ok) throw new Error(data.error || 'Error desconocido');
+      if (!res.ok) {
+        const error = new Error(data.error || 'Error desconocido');
+        error.data = data;
+        throw error;
+      }
       return data;
     } catch (err) {
       console.error('Respuesta inválida:', text);
@@ -26,6 +30,7 @@ const API = {
   getLineasCobro(id){ return this._fetch(`${this.base}api/mesas.php?action=lineas_cobro&id=${id}`); },
   getCierreData() { return this._fetch(`${this.base}api/cierre.php?action=datos`); },
   getDispositivo() { return this._fetch(`${this.base}api/dispositivo.php`); },
+  registrarDispositivo(nombre, password) { return this.post('api/dispositivo.php', { nombre, password }); },
   cerrarDia() { return this.post('api/cierre.php?action=cerrar', {}); },
 
   crearMesa(nombre) { return this.post('api/mesas.php?action=crear', { nombre }); },
@@ -59,7 +64,12 @@ function obtenerNombreDispositivo() {
 }
 
 async function cargarNombreDispositivoPorIP() {
-  const data = await API.getDispositivo();
+  let data;
+  try {
+    data = await API.getDispositivo();
+  } catch (err) {
+    throw err;
+  }
   const nombre = (data.nombre || '').trim();
 
   if (!data.autorizado || !nombre || nombre === 'Sin identificar') {

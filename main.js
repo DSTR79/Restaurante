@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const nombre = await cargarNombreDispositivoPorIP();
     if (headerNombre) headerNombre.textContent = nombre;
   } catch (err) {
-    mostrarBloqueoAcceso(err.message);
+    mostrarBloqueoRegistroDispositivo(err);
     return;
   }
 
@@ -248,5 +248,97 @@ function mostrarBloqueoAcceso(mensaje) {
         <h3>Acceso denegado</h3>
         <p>${escHtml(mensaje || 'Esta IP no está registrada en la base de datos.')}</p>
       </div>`;
+  }
+}
+
+function mostrarBloqueoRegistroDispositivo(error) {
+  const main = document.querySelector('main');
+  const headerNombre = document.getElementById('headerNombreDispositivo');
+  const acciones = document.querySelectorAll('button');
+  const mensaje = error?.message || 'Esta IP no esta registrada en la base de datos.';
+  const ip = error?.data?.ip || 'No detectada';
+
+  if (headerNombre) headerNombre.textContent = 'IP no registrada';
+  acciones.forEach(btn => {
+    btn.disabled = true;
+  });
+
+  if (main) {
+    main.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">!</div>
+        <h3>Acceso denegado</h3>
+        <p>${escHtml(mensaje)}</p>
+        <p><strong>IP detectada:</strong> ${escHtml(ip)}</p>
+        <div class="form-group">
+          <label for="inputRegistroNombre">Nombre de usuario</label>
+          <input
+            type="text"
+            id="inputRegistroNombre"
+            class="form-input"
+            placeholder="Nombre del trabajador"
+            maxlength="100"
+            autocomplete="off"
+          />
+        </div>
+        <div class="form-group">
+          <label for="inputRegistroPassword">Contraseña de administrador</label>
+          <input
+            type="password"
+            id="inputRegistroPassword"
+            class="form-input"
+            placeholder="Contraseña"
+            autocomplete="current-password"
+          />
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="btnRegistrarDispositivo">Registrar dispositivo</button>
+        </div>
+      </div>`;
+  }
+
+  const btnRegistrar = document.getElementById('btnRegistrarDispositivo');
+  const inputNombre = document.getElementById('inputRegistroNombre');
+  const inputPassword = document.getElementById('inputRegistroPassword');
+
+  async function registrarDispositivoActual() {
+    const nombre = inputNombre.value.trim();
+    const password = inputPassword.value.trim();
+
+    if (!nombre) {
+      mostrarToast('Introduce un nombre de usuario.', 'warning');
+      inputNombre.focus();
+      return;
+    }
+
+    if (!password) {
+      mostrarToast('Introduce la contraseña de administrador.', 'warning');
+      inputPassword.focus();
+      return;
+    }
+
+    btnRegistrar.disabled = true;
+    setLoader(true);
+    try {
+      const result = await API.registrarDispositivo(nombre, password);
+      mostrarToast(`Dispositivo registrado como "${result.nombre}"`, 'success');
+      setTimeout(() => window.location.reload(), 500);
+    } catch (err) {
+      mostrarToast(err.message, 'error');
+      btnRegistrar.disabled = false;
+    } finally {
+      setLoader(false);
+    }
+  }
+
+  if (btnRegistrar && inputNombre && inputPassword) {
+    btnRegistrar.addEventListener('click', registrarDispositivoActual);
+    inputNombre.addEventListener('keydown', e => {
+      if (e.key === 'Enter') inputPassword.focus();
+    });
+    inputPassword.addEventListener('keydown', e => {
+      if (e.key === 'Enter') registrarDispositivoActual();
+    });
+    inputNombre.focus();
   }
 }
