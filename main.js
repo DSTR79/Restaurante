@@ -31,22 +31,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     mesasGrid.addEventListener('click', handleMesaGridClick);
   }
 
-  // Forzar pantalla completa al interactuar y recordar preferencia
-  document.addEventListener('click', () => {
-    if (!document.fullscreenElement && !window.navigator.standalone) {
-      document.documentElement.requestFullscreen()
-        .then(() => {
-          localStorage.setItem('fullscreen_preferred', 'true');
-        })
-        .catch(() => {});
-    }
-  });
-
-  // Intentar restaurar si el usuario ya lo activó antes
-  if (localStorage.getItem('fullscreen_preferred') === 'true' && !document.fullscreenElement) {
-    // El navegador requiere un gesto, así que el primer click lo activará arriba
-  }
-
   const botonCierre = document.getElementById('btnCierre');
   if (botonCierre) {
     botonCierre.addEventListener('click', abrirCierrePassword);

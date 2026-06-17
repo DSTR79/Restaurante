@@ -15,19 +15,6 @@ let metodoPagoSeleccionado = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
 
-  document.addEventListener('click', () => {
-    if (!document.fullscreenElement && !window.navigator.standalone) {
-      document.documentElement.requestFullscreen()
-        .then(() => {
-          localStorage.setItem('fullscreen_preferred', 'true');
-        })
-        .catch(() => {});
-    }
-  });
-
-  if (localStorage.getItem('fullscreen_preferred') === 'true' && !document.fullscreenElement) {
-  }
-
   try {
     const mesas = await API.getMesas();
     renderizarMesas(mesas);
@@ -463,6 +450,12 @@ async function ejecutarCobro() {
 
     reloadAfterTickets = accionPendiente === 'todo' && !mesaCobrada;
     
+    // Si es cobro parcial, ir a index después
+    if (accionPendiente === 'seleccion') {
+      ticketReturnToIndex = true;
+    }
+    
+    // Siempre añadir ticket si existe (tanto cobro total como parcial)
     if (res.ticket) ticketQueue.push(res.ticket);
     
     // Si es cobro completo y quiere factura, añadir ticket completo
@@ -470,6 +463,7 @@ async function ejecutarCobro() {
       ticketQueue.push(res.ticket_completo);
     }
 
+    // Procesar cola de tickets SIEMPRE si hay tickets, sin importar el tipo de cobro
     if (ticketQueue.length) {
       procesarTicketQueue();
     } else {
@@ -604,7 +598,10 @@ function cerrarTicket() {
     // No resetear mesaCobrado aquí
     window.location.href = 'index.html';
   } else {
-    entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
+    // Si después de cerrar ticket no hay banderas especiales, ir a index
+    liberarMesaCobro().finally(() => {
+      window.location.href = 'index.html';
+    });
   }
 }
 
