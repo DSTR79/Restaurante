@@ -74,6 +74,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   bindEventos();
 
+  // Forzar pantalla completa al interactuar y recordar preferencia
+  document.addEventListener('click', () => {
+    if (!document.fullscreenElement && !window.navigator.standalone) {
+      document.documentElement.requestFullscreen()
+        .then(() => {
+          localStorage.setItem('fullscreen_preferred', 'true');
+        })
+        .catch(() => {});
+    }
+  });
+
+  // Intentar restaurar si el usuario ya lo activó antes
+  if (localStorage.getItem('fullscreen_preferred') === 'true' && !document.fullscreenElement) {
+    // El navegador requiere un gesto, así que el primer click lo activará arriba
+  }
+
   setLoader(true);
   try {
     await cargarProductos();
@@ -159,11 +175,15 @@ function toggleBusqueda() {
     categoriaActiva = '__TODAS__';
     familiaActiva = '__TODAS__';
     buscador.style.display = 'block';
-    setTimeout(() => input?.focus(), 50);
+    setTimeout(() => {
+      input?.focus();
+      if (typeof Keyboard !== 'undefined') Keyboard.open(input);
+    }, 50);
   } else {
     busquedaTexto = '';
     input.value = '';
     buscador.style.display = 'none';
+    if (typeof Keyboard !== 'undefined') Keyboard.close();
   }
   renderizarFamilias();
   renderizarProductos();
@@ -488,6 +508,20 @@ async function repetirLinea(productoId, texto) {
 }
 
 async function agregarProducto(productoId) {
+  // Si hay búsqueda activa, la quitamos al seleccionar producto
+  if (busquedaActiva) {
+    busquedaActiva = false;
+    busquedaTexto = '';
+    const buscador = document.getElementById('productosSearch');
+    const input = document.getElementById('busquedaNombre');
+    if (buscador) buscador.style.display = 'none';
+    if (input) input.value = '';
+    familiaActiva = '__TODAS__';
+    categoriaActiva = '__TODAS__';
+    if (typeof Keyboard !== 'undefined') Keyboard.close();
+    renderizarFamilias();
+  }
+
   const lineaActual = lineas.find(
     l => parseInt(l.producto_id) === parseInt(productoId)
   );

@@ -25,6 +25,11 @@ try {
             $sumTotal += $unids * $pv;
         }
 
+        // Solo mostramos mesas que tengan algo pendiente (consumo > 0)
+        if ($sumTotal <= 0.001) {
+            continue;
+        }
+
         $mesas[] = [
             'MESA' => $id,
             'NOMBRE' => $m['NOMBRE'],

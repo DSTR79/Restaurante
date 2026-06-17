@@ -14,20 +14,30 @@ let reloadAfterTickets = false;
 let metodoPagoSeleccionado = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
+
+  document.addEventListener('click', () => {
+    if (!document.fullscreenElement && !window.navigator.standalone) {
+      document.documentElement.requestFullscreen()
+        .then(() => {
+          localStorage.setItem('fullscreen_preferred', 'true');
+        })
+        .catch(() => {});
+    }
+  });
+
+  if (localStorage.getItem('fullscreen_preferred') === 'true' && !document.fullscreenElement) {
+  }
+
   try {
     const mesas = await API.getMesas();
     renderizarMesas(mesas);
     if (mesaActiva) {
-      const mesa = mesas.find(m =>
-        parseInt(m.MESA) === parseInt(mesaActiva)
-      );
-      if (mesa) {
-        await entrarMesa(
-          mesa.MESA,
-          mesa.NOMBRE
-        );
-      } else {
-        mostrarToast('Mesa no encontrada. Redirigiendo al inicio.', 'warning');
+      // Intentar entrar directamente si tenemos el ID, 
+      // aunque no aparezca en el resumen de pendientes (porque ya se cobró)
+      try {
+        await entrarMesa(mesaActiva, "Mesa " + mesaActiva);
+      } catch (err) {
+        mostrarToast('Mesa no encontrada o ya cerrada.', 'warning');
         setTimeout(() => window.location.href = 'index.html', 1000);
       }
     }
@@ -53,7 +63,7 @@ async function cargarMesas() {
 function renderizarMesas(mesas) {
   const grid = document.getElementById('cobroMesasGrid');
 
-  const cobrable = mesas.filter(m => parseFloat(m.TOTAL_PTE) > 0);
+  const cobrable = mesas.filter(m => m.ESTADO !== 'COBRADA' && parseFloat(m.TOTAL_PTE) > 0);
 
   if (!cobrable.length) {
     grid.innerHTML = `
@@ -302,6 +312,11 @@ function abrirConfirmar(tipo) {
   document.getElementById('btnConfirmarCobro').disabled = false;
 
   const esTodo = tipo === 'todo';
+  
+  // Mostrar opción de factura completa solo si es cobro total
+  document.getElementById('opcionFacturaCompleta').style.display = esTodo ? 'block' : 'none';
+  document.getElementById('checkFacturaCompleta').checked = false;
+
   const importe = esTodo
     ? totalPte
     : parseFloat(document.getElementById('resumenSel').textContent.replace(',', '.').replace(/[^0-9.]/g, ''));
@@ -422,6 +437,9 @@ async function ejecutarCobro() {
 
   cerrarModal('modalConfirmar');
   setLoader(true);
+  
+  const facturarCompleto = accionPendiente === 'todo' && document.getElementById('checkFacturaCompleta').checked;
+  
   try {
     const res = await API.cobrarMesa(mesaActiva, 
       accionPendiente === 'todo' ? [] : obtenerItemsSeleccionados(),
@@ -431,30 +449,41 @@ async function ejecutarCobro() {
 
     ticketQueue = [];
     const mesaCobrada = res.mesa_cobrada === true;
-    ticketReturnToMesas = mesaCobrada;
-    ticketReturnToIndex = !mesaCobrada && accionPendiente !== 'todo';
-    mesaCobrado = mesaCobrada;
-    reloadAfterTickets = accionPendiente === 'todo';
+    
+    // Si la mesa está cobrada, actualizar su estado a COBRADA
+    if (mesaCobrada) {
+      try {
+        await API.estadoMesa(mesaActiva, 'COBRADA');
+      } catch (err) {
+        console.warn('No se pudo actualizar estado a COBRADA:', err.message);
+      }
+      mesaCobrado = true;
+      ticketReturnToMesas = true;
+    }
+
+    reloadAfterTickets = accionPendiente === 'todo' && !mesaCobrada;
+    
     if (res.ticket) ticketQueue.push(res.ticket);
-    if (res.ticket_completo) {
+    
+    // Si es cobro completo y quiere factura, añadir ticket completo
+    if (facturarCompleto && res.ticket_completo) {
       ticketQueue.push(res.ticket_completo);
     }
 
     if (ticketQueue.length) {
       procesarTicketQueue();
     } else {
-      if (reloadAfterTickets) {
-        window.location.reload();
-        return;
-      }
-      if (ticketReturnToIndex) {
-        await liberarMesaCobro();
-        window.location.href = 'index.html';
-        return;
-      }
       mostrarToast('Cobro registrado', 'success');
       if (mesaCobrada) {
-        setTimeout(() => volverMesas(true), 1200);
+        // Mesa completamente cobrada: ir al index
+        setTimeout(() => {
+          window.location.href = 'index.html';
+        }, 1200);
+      } else if (reloadAfterTickets) {
+        window.location.reload();
+      } else if (ticketReturnToIndex) {
+        await liberarMesaCobro();
+        window.location.href = 'index.html';
       } else {
         await entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
       }
@@ -542,8 +571,8 @@ function procesarTicketQueue() {
     }
     if (ticketReturnToMesas || mesaCobrado) {
       ticketReturnToMesas = false;
-      mesaCobrado = false;
-      volverMesas(true);
+      // No resetear mesaCobrado aquí para que handleCobroUnload no la libere al salir
+      window.location.href = 'index.html';
     } else {
       entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
     }
@@ -572,8 +601,8 @@ function cerrarTicket() {
   }
   if (ticketReturnToMesas || mesaCobrado) {
     ticketReturnToMesas = false;
-    mesaCobrado = false;
-    volverMesas(true);
+    // No resetear mesaCobrado aquí
+    window.location.href = 'index.html';
   } else {
     entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
   }

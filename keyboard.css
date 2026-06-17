@@ -1,0 +1,67 @@
+/* keyboard.css */
+.virtual-keyboard {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: var(--brown-800, #2C1A0E);
+  padding: 10px;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+  display: none; /* Se activa por JS */
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  user-select: none;
+  border-top: 2px solid var(--gold, #C8952A);
+}
+
+.keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.key {
+  background: var(--brown-600, #6B3F2A);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 15px 0;
+  flex: 1;
+  max-width: 80px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.1s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.key:active {
+  background: var(--gold, #C8952A);
+  transform: translateY(2px);
+}
+
+.key.wide {
+  flex: 2;
+  max-width: 160px;
+  background: var(--brown-500, #8B5E3C);
+}
+
+.key.danger {
+  background: var(--danger, #9B2020);
+}
+
+.key.success {
+  background: var(--success, #3A7A40);
+}
+
+/* Solo mostrar en pantallas grandes (PC) si no es táctil */
+@media (pointer: fine) {
+  .virtual-keyboard.active {
+    display: flex;
+  }
+}

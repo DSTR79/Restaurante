@@ -327,7 +327,11 @@ function cobrarMesa() {
             $stmt = $pdo->prepare("UPDATE LINEAS SET ESTADO_LIN = 'PAGADO' WHERE MESA_LIN = ? AND COALESCE(ESTADO_LIN,'') != 'PAGADO'");
             $stmt->execute([$id]);
 
-            $stmt = $pdo->prepare('UPDATE MESAS SET ESTADO_MESA = "COBRADA", TOTAL_PTE = 0, ABIERTO_POR = NULL WHERE MESA = ?');
+            // Usar procedimiento para cambiar a COBRADA
+            $stmt = $pdo->prepare('CALL CAMBIAR_ESTADO_MESA(?, "COBRADA", "")');
+            $stmt->execute([$id]);
+            
+            $stmt = $pdo->prepare('UPDATE MESAS SET TOTAL_PTE = 0, ABIERTO_POR = NULL, FECHA_APERTURA = NOW() WHERE MESA = ?');
             $stmt->execute([$id]);
         } else {
             $computed = array_reduce($items, fn($s, $i) => $s + (($i['cantidad'] ?? 0) * ($i['precio_unitario'] ?? 0)), 0);
@@ -426,14 +430,19 @@ function cobrarMesa() {
             $stmt = $pdo->prepare('UPDATE MESAS SET TOTAL_PTE = GREATEST(0, TOTAL_PTE - ?) WHERE MESA = ?');
             $stmt->execute([$paid, $id]);
 
-            if ($paid > 0) {
-                $stmt = $pdo->prepare('SELECT TOTAL_PTE FROM MESAS WHERE MESA = ?');
+            // Verificar si después de cobrar esta parte, la mesa ya no tiene nada pendiente
+            $stmt = $pdo->prepare('SELECT SUM(UNIDS * PV_LIN) FROM LINEAS WHERE MESA_LIN = ? AND COALESCE(ESTADO_LIN, "") != "PAGADO"');
+            $stmt->execute([$id]);
+            $totalRestanteReal = floatval($stmt->fetchColumn() ?: 0);
+
+            if ($totalRestanteReal <= 0.001) {
+                // Usar procedimiento CAMBIAR_ESTADO_MESA para marcar como COBRADA
+                $stmt = $pdo->prepare('CALL CAMBIAR_ESTADO_MESA(?, "COBRADA", "")');
                 $stmt->execute([$id]);
-                $totalPteRestante = floatval($stmt->fetchColumn() ?: 0);
-                if ($totalPteRestante <= 0) {
-                    $stmt = $pdo->prepare('UPDATE MESAS SET ESTADO_MESA = "COBRADA", ABIERTO_POR = NULL WHERE MESA = ?');
-                    $stmt->execute([$id]);
-                }
+                
+                // Limpiar TOTAL_PTE y ABIERTO_POR
+                $stmt = $pdo->prepare('UPDATE MESAS SET TOTAL_PTE = 0, ABIERTO_POR = NULL, FECHA_APERTURA = NOW() WHERE MESA = ?');
+                $stmt->execute([$id]);
             }
         }
 
@@ -813,8 +822,14 @@ function estadoMesa() {
     }
 
     try {
-        $stmt = $pdo->prepare('UPDATE MESAS SET ESTADO_MESA = ? WHERE MESA = ?');
-        $stmt->execute([$estado, $id]);
+        // Si el estado es COBRADA, también limpiar ABIERTO_POR y TOTAL_PTE
+        if ($estado === 'COBRADA') {
+            $stmt = $pdo->prepare('UPDATE MESAS SET ESTADO_MESA = ?, ABIERTO_POR = NULL, TOTAL_PTE = 0 WHERE MESA = ?');
+            $stmt->execute([$estado, $id]);
+        } else {
+            $stmt = $pdo->prepare('UPDATE MESAS SET ESTADO_MESA = ? WHERE MESA = ?');
+            $stmt->execute([$estado, $id]);
+        }
         sendJson(['success' => true]);
     } catch (Throwable $e) {
         sendError($e->getMessage(), 500);
