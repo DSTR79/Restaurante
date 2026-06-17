@@ -842,9 +842,6 @@ function obtenerMesasDisponiblesConLineas() {
     try {
         $mesaActiva = (int)($_GET['mesa_activa'] ?? $_POST['mesa_activa'] ?? 0);
         
-        error_log("=== OBTENER MESAS DISPONIBLES ===");
-        error_log("Mesa activa: $mesaActiva");
-        
         $sql = "SELECT m.MESA, m.NOMBRE_MESA, m.ESTADO_MESA, m.ABIERTO_POR
                 FROM MESAS m
                 WHERE m.ESTADO_MESA != 'COBRADA'";
@@ -853,12 +850,8 @@ function obtenerMesasDisponiblesConLineas() {
             $sql .= " AND m.MESA != $mesaActiva";
         }
         
-        error_log("Query: $sql");
-        
         $stmt = $pdo->query($sql);
         $mesas = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        error_log("Mesas encontradas: " . count($mesas));
         
         $result = [];
         
@@ -874,7 +867,6 @@ function obtenerMesasDisponiblesConLineas() {
             $lineas = $stmtLin->fetchAll(PDO::FETCH_ASSOC);
             
             if (count($lineas) == 0) {
-                error_log("Mesa $id: sin líneas pendientes");
                 continue;
             }
             
@@ -897,8 +889,6 @@ function obtenerMesasDisponiblesConLineas() {
                 ];
             }
             
-            error_log("Mesa $id: " . count($lineas) . " lineas, total=$total");
-            
             if ($total > 0) {
                 $result[] = [
                     'mesa' => $id,
@@ -911,13 +901,9 @@ function obtenerMesasDisponiblesConLineas() {
             }
         }
         
-        error_log("Resultado: " . count($result) . " mesas con consumo");
-        error_log("=== FIN ===");
-        
         sendJson($result);
         
     } catch (Throwable $e) {
-        error_log("EXCEPCIÓN: " . $e->getMessage());
         sendError($e->getMessage(), 500);
     }
 }
@@ -933,19 +919,6 @@ if ($action === null) {
         crearMesa();
     }
     sendError('Método no permitido', 405);
-}
-
-// Debug endpoint
-if ($action === 'debug_mesas') {
-    try {
-        $stmt = $pdo->query("SELECT m.MESA, m.NOMBRE_MESA, m.ESTADO_MESA, COUNT(l.LINEA) as num_lineas 
-                            FROM MESAS m 
-                            LEFT JOIN LINEAS l ON l.MESA_LIN = m.MESA 
-                            GROUP BY m.MESA");
-        sendJson($stmt->fetchAll(PDO::FETCH_ASSOC));
-    } catch (Throwable $e) {
-        sendError($e->getMessage(), 500);
-    }
 }
 
 switch ($action) {

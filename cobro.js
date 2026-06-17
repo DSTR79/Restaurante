@@ -23,16 +23,10 @@ let itemsExtraAnadidos = []; // Items añadidos de otras mesas (intocables)
 async function abrirAnadirDesdeMesa() {
   setLoader(true);
   try {
-    console.log('abrirAnadirDesdeMesa: mesaActiva=', mesaActiva);
-    
     mesasDisponibles = await API.getMesasDisponiblesConLineas(mesaActiva);
-    
-    console.log('Mesas disponibles cargadas:', mesasDisponibles);
-    console.log('Cantidad:', mesasDisponibles ? mesasDisponibles.length : 0);
     
     if (!mesasDisponibles || !Array.isArray(mesasDisponibles) || mesasDisponibles.length === 0) {
       mostrarToast('No hay mesas disponibles con consumo pendiente', 'warning');
-      console.warn('Sin mesas disponibles');
       setLoader(false);
       return;
     }
@@ -45,7 +39,6 @@ async function abrirAnadirDesdeMesa() {
     abrirModal('modalAnadirDesdeMesa');
   } catch (err) {
     console.error('Error al cargar mesas:', err);
-    console.error('Stack:', err.stack);
     mostrarToast('Error al cargar mesas: ' + err.message, 'error');
   } finally {
     setLoader(false);
@@ -172,7 +165,6 @@ async function confirmarAnadirDesdeMesa() {
     const mesaSeleccionada = mesasDisponibles.find(m => m.mesa === mesaSeleccionadaExtra);
     if (!mesaSeleccionada) {
       mostrarToast('Error: Mesa no encontrada', 'error');
-      console.error('Mesa no encontrada:', mesaSeleccionadaExtra, 'en', mesasDisponibles);
       return;
     }
     
@@ -184,7 +176,6 @@ async function confirmarAnadirDesdeMesa() {
     const itemsExtra = Object.entries(productosSeleccionadosExtra).map(([productoId, cantidad]) => {
       const linea = mesaSeleccionada.lineas.find(l => l.producto_id == productoId);
       if (!linea) {
-        console.warn('Línea no encontrada para producto:', productoId);
         return null;
       }
       return {
@@ -207,7 +198,6 @@ async function confirmarAnadirDesdeMesa() {
     
     mostrarToast(`${itemsExtra.length} producto(s) añadido(s) desde ${mesaSeleccionada.nombre}`, 'success');
   } catch (err) {
-    console.error('Error en confirmarAnadirDesdeMesa:', err);
     mostrarToast('Error al bloquear mesa: ' + err.message, 'error');
   }
 }
@@ -367,9 +357,8 @@ async function volverMesas(skipEstado = false) {
     }
   }
 
-  // Liberar mesas extras si quedan bloqueadas
-  await liberarMesasExtrasBloqueadas();
-
+  // NO liberar mesas extras aquí - se liberan solo después de cobro exitoso
+  
   mesaActiva = null;
 
   document.getElementById('vistaCobro').style.display = 'none';
@@ -379,10 +368,9 @@ async function volverMesas(skipEstado = false) {
 }
 
 async function volverAMesa() {
-  // Liberar mesas extras si quedan bloqueadas
-  await liberarMesasExtrasBloqueadas();
+  // NO liberar mesas extras aquí - se liberan solo después de cobro exitoso
   
-  // Liberar la mesa y redirigir al index
+  // Liberar la mesa principal y redirigir al index
   if (mesaActiva && !mesaCobrado) {
     try {
       await API.estadoMesa(mesaActiva, 'DISPONIBLE');
@@ -391,7 +379,7 @@ async function volverAMesa() {
     }
   }
   
-  // Limpiar variables de items extra
+  // Limpiar variables de items extra (pero NO liberar mesas en BD)
   itemsExtraAnadidos = [];
   window.itemsExtraParaCobro = null;
   mesasBloquedadasExtra = [];
@@ -790,6 +778,9 @@ async function ejecutarCobro() {
     // Si es cobro parcial, ir a index INMEDIATAMENTE (sin esperar tickets)
     if (accionPendiente === 'seleccion') {
       ticketReturnToIndex = true;
+      // ANTES de redirigir, liberar mesas extras
+      await liberarMesasExtrasBloqueadas();
+      itemsExtraAnadidos = [];
       // Redirigir sin esperar tickets
       setLoader(false);
       liberarMesaCobro().finally(() => {
@@ -826,8 +817,8 @@ async function ejecutarCobro() {
     }
   } catch (err) { 
     mostrarToast('Error: ' + err.message, 'error');
-    // Liberar mesas extras en caso de error
-    await liberarMesasExtrasBloqueadas();
+    // NO liberar mesas extras en caso de error - permitir reintentar
+    console.error('Error en cobro, mesas extras permanecen bloqueadas para reintentar:', mesasBloquedadasExtra);
   }
   finally { setLoader(false); }
 }
