@@ -13,12 +13,11 @@ let mesaCobrado = false;
 let reloadAfterTickets = false;
 let metodoPagoSeleccionado = null;
 
-// Variables para añadir desde otra mesa
 let mesasDisponibles = [];
 let mesaSeleccionadaExtra = null;
-let productosSeleccionadosExtra = {}; // {producto_id: cantidad}
-let mesasBloquedadasExtra = []; // Mesas temporalmente bloqueadas
-let itemsExtraAnadidos = []; // Items añadidos de otras mesas (intocables)
+let productosSeleccionadosExtra = {};
+let mesasBloquedadasExtra = []; 
+let itemsExtraAnadidos = [];
 
 async function abrirAnadirDesdeMesa() {
   setLoader(true);
@@ -161,18 +160,15 @@ async function confirmarAnadirDesdeMesa() {
   }
 
   try {
-    // Obtener la mesa seleccionada
     const mesaSeleccionada = mesasDisponibles.find(m => m.mesa === mesaSeleccionadaExtra);
     if (!mesaSeleccionada) {
       mostrarToast('Error: Mesa no encontrada', 'error');
       return;
     }
     
-    // Bloquear la mesa extra
     await API.estadoMesa(mesaSeleccionadaExtra, 'OCUPADA');
     mesasBloquedadasExtra.push(mesaSeleccionadaExtra);
     
-    // Preparar items para cobro combinado
     const itemsExtra = Object.entries(productosSeleccionadosExtra).map(([productoId, cantidad]) => {
       const linea = mesaSeleccionada.lineas.find(l => l.producto_id == productoId);
       if (!linea) {
@@ -187,12 +183,10 @@ async function confirmarAnadirDesdeMesa() {
       };
     }).filter(item => item !== null);
     
-    // Almacenar items extra como agregados (intocables)
     itemsExtraAnadidos = itemsExtra;
     
     cerrarModalAnadirMesa();
     
-    // Actualizar pantalla de cobro para mostrar items extra
     renderizarCobro();
     recalcularSel();
     
@@ -228,8 +222,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mesas = await API.getMesas();
     renderizarMesas(mesas);
     if (mesaActiva) {
-      // Intentar entrar directamente si tenemos el ID, 
-      // aunque no aparezca en el resumen de pendientes (porque ya se cobró)
       try {
         await entrarMesa(mesaActiva, "Mesa " + mesaActiva);
       } catch (err) {
@@ -356,8 +348,6 @@ async function volverMesas(skipEstado = false) {
       mostrarToast('No se pudo liberar la mesa: ' + err.message, 'error');
     }
   }
-
-  // NO liberar mesas extras aquí - se liberan solo después de cobro exitoso
   
   mesaActiva = null;
 
@@ -368,9 +358,7 @@ async function volverMesas(skipEstado = false) {
 }
 
 async function volverAMesa() {
-  // NO liberar mesas extras aquí - se liberan solo después de cobro exitoso
-  
-  // Liberar la mesa principal y redirigir al index
+
   if (mesaActiva && !mesaCobrado) {
     try {
       await API.estadoMesa(mesaActiva, 'DISPONIBLE');
@@ -379,7 +367,6 @@ async function volverAMesa() {
     }
   }
   
-  // Limpiar variables de items extra (pero NO liberar mesas en BD)
   itemsExtraAnadidos = [];
   window.itemsExtraParaCobro = null;
   mesasBloquedadasExtra = [];
@@ -388,7 +375,6 @@ async function volverAMesa() {
 }
 
 function renderizarCobro() {
-  // Calcular total pendiente INCLUIDO items extra
   let totalConExtra = totalPte;
   if (itemsExtraAnadidos.length > 0) {
     itemsExtraAnadidos.forEach(item => {
@@ -544,12 +530,10 @@ function recalcularSel() {
 }
 
 function eliminarItemExtra(productoId, mesaOrigen) {
-  // Eliminar item extra de la lista
   itemsExtraAnadidos = itemsExtraAnadidos.filter(item => 
     !(item.producto_id === productoId && item.mesa_origen === mesaOrigen)
   );
   
-  // Si no hay más items extra, liberar la mesa bloqueada
   if (itemsExtraAnadidos.length === 0) {
     const idx = mesasBloquedadasExtra.indexOf(mesaOrigen);
     if (idx > -1) {
@@ -561,7 +545,6 @@ function eliminarItemExtra(productoId, mesaOrigen) {
     }
   }
   
-  // Actualizar pantalla
   renderizarCobro();
   recalcularSel();
   mostrarToast('Producto removido', 'info');
@@ -580,7 +563,6 @@ function abrirConfirmar(tipo) {
 
   const esTodo = tipo === 'todo';
   
-  // Mostrar opción de factura completa solo si es cobro total
   document.getElementById('opcionFacturaCompleta').style.display = esTodo ? 'block' : 'none';
   document.getElementById('checkFacturaCompleta').checked = false;
 
@@ -675,7 +657,6 @@ function liberarMesaCobroSync() {
       navigator.sendBeacon('api/mesas.php?action=estado', blob);
       return;
     } catch (error) {
-      // fallback to fetch
     }
   }
 
@@ -691,7 +672,6 @@ function handleCobroUnload() {
   if (mesaActiva && !mesaCobrado) {
     liberarMesaCobroSync();
   }
-  // Intentar liberar mesas extras también
   if (mesasBloquedadasExtra.length > 0) {
     mesasBloquedadasExtra.forEach(mesaId => {
       fetch('api/mesas.php?action=estado', {
@@ -729,7 +709,6 @@ async function ejecutarCobro() {
     ticketQueue = [];
     const mesaCobrada = res.mesa_cobrada === true;
     
-    // Si hay items extra, procesarlos también
     if (itemsExtra.length > 0) {
       for (const item of itemsExtra) {
         try {
@@ -750,19 +729,16 @@ async function ejecutarCobro() {
       }
     }
     
-    // Agregar ticket principal
     if (res.ticket) {
       res.ticket.titulo = `Cobro - ${document.getElementById('cobroMesaNombre').textContent}`;
       ticketQueue.unshift(res.ticket);
     }
     
-    // Si es cobro total y completo, agregar ticket de resumen
     if (facturarCompleto && res.ticket_completo) {
       res.ticket_completo.titulo = 'Ticket completo de mesa';
       ticketQueue.push(res.ticket_completo);
     }
     
-    // Si la mesa está cobrada, actualizar estado
     if (mesaCobrada) {
       try {
         await API.estadoMesa(mesaActiva, 'COBRADA');
@@ -775,29 +751,23 @@ async function ejecutarCobro() {
 
     reloadAfterTickets = accionPendiente === 'todo' && !mesaCobrada;
     
-    // Si es cobro parcial, ir a index INMEDIATAMENTE (sin esperar tickets)
     if (accionPendiente === 'seleccion') {
       ticketReturnToIndex = true;
-      // ANTES de redirigir, liberar mesas extras
       await liberarMesasExtrasBloqueadas();
       itemsExtraAnadidos = [];
-      // Redirigir sin esperar tickets
       setLoader(false);
       liberarMesaCobro().finally(() => {
         window.location.href = 'index.html';
       });
-      // Procesar tickets en background
       if (ticketQueue.length) {
         procesarTicketQueueBackground();
       }
       return;
     }
-    
-    // Liberar mesas extras después de cobrarlas
+
     await liberarMesasExtrasBloqueadas();
     itemsExtraAnadidos = [];
 
-    // Procesar cola de tickets
     if (ticketQueue.length) {
       procesarTicketQueue();
     } else {
@@ -817,7 +787,6 @@ async function ejecutarCobro() {
     }
   } catch (err) { 
     mostrarToast('Error: ' + err.message, 'error');
-    // NO liberar mesas extras en caso de error - permitir reintentar
     console.error('Error en cobro, mesas extras permanecen bloqueadas para reintentar:', mesasBloquedadasExtra);
   }
   finally { setLoader(false); }
@@ -904,7 +873,6 @@ function procesarTicketQueue() {
     }
     if (ticketReturnToMesas || mesaCobrado) {
       ticketReturnToMesas = false;
-      // No resetear mesaCobrado aquí para que handleCobroUnload no la libere al salir
       window.location.href = 'index.html';
     } else {
       entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
@@ -917,12 +885,10 @@ function procesarTicketQueue() {
 }
 
 function procesarTicketQueueBackground() {
-  // Imprime tickets en background sin mostrar modal
   if (!ticketQueue.length) return;
   
   const ticket = ticketQueue.shift();
   
-  // Simular contenido del ticket para imprimir
   const contenido = buildTicketHtml(ticket);
   const ventana = window.open('', '_blank', 'width=400,height=600');
   ventana.document.write(`
@@ -937,12 +903,10 @@ function procesarTicketQueueBackground() {
   `);
   ventana.document.close();
   
-  // Auto-imprimir
   setTimeout(() => {
     ventana.print();
     ventana.close();
     
-    // Procesar siguiente ticket
     setTimeout(() => {
       procesarTicketQueueBackground();
     }, 500);
@@ -967,10 +931,8 @@ function cerrarTicket() {
   }
   if (ticketReturnToMesas || mesaCobrado) {
     ticketReturnToMesas = false;
-    // No resetear mesaCobrado aquí
     window.location.href = 'index.html';
   } else {
-    // Si después de cerrar ticket no hay banderas especiales, ir a index
     liberarMesaCobro().finally(() => {
       window.location.href = 'index.html';
     });
