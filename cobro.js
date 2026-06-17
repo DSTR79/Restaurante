@@ -13,6 +13,225 @@ let mesaCobrado = false;
 let reloadAfterTickets = false;
 let metodoPagoSeleccionado = null;
 
+// Variables para añadir desde otra mesa
+let mesasDisponibles = [];
+let mesaSeleccionadaExtra = null;
+let productosSeleccionadosExtra = {}; // {producto_id: cantidad}
+let mesasBloquedadasExtra = []; // Mesas temporalmente bloqueadas
+let itemsExtraAnadidos = []; // Items añadidos de otras mesas (intocables)
+
+async function abrirAnadirDesdeMesa() {
+  setLoader(true);
+  try {
+    console.log('abrirAnadirDesdeMesa: mesaActiva=', mesaActiva);
+    
+    mesasDisponibles = await API.getMesasDisponiblesConLineas(mesaActiva);
+    
+    console.log('Mesas disponibles cargadas:', mesasDisponibles);
+    console.log('Cantidad:', mesasDisponibles ? mesasDisponibles.length : 0);
+    
+    if (!mesasDisponibles || !Array.isArray(mesasDisponibles) || mesasDisponibles.length === 0) {
+      mostrarToast('No hay mesas disponibles con consumo pendiente', 'warning');
+      console.warn('Sin mesas disponibles');
+      setLoader(false);
+      return;
+    }
+
+    mesaSeleccionadaExtra = null;
+    productosSeleccionadosExtra = {};
+    mesasBloquedadasExtra = [];
+    
+    renderizarMesasDisponibles();
+    abrirModal('modalAnadirDesdeMesa');
+  } catch (err) {
+    console.error('Error al cargar mesas:', err);
+    console.error('Stack:', err.stack);
+    mostrarToast('Error al cargar mesas: ' + err.message, 'error');
+  } finally {
+    setLoader(false);
+  }
+}
+
+function renderizarMesasDisponibles() {
+  const container = document.getElementById('anadirMesasContenedor');
+  
+  if (!mesasDisponibles.length) {
+    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px">No hay mesas disponibles</div>';
+    return;
+  }
+
+  const html = mesasDisponibles.map(m => `
+    <button class="anadirmesa-mesa-btn ${mesaSeleccionadaExtra === m.mesa ? 'active' : ''}" 
+            onclick="seleccionarMesaExtra(${m.mesa})">
+      ${escHtml(m.nombre)}<br>
+      <small style="opacity:.7">${parseFloat(m.total_pte).toFixed(2).replace('.', ',')} €</small>
+    </button>
+  `).join('');
+
+  container.innerHTML = `<div class="anadirmesa-mesas-grid">${html}</div>`;
+}
+
+function seleccionarMesaExtra(mesaId) {
+  mesaSeleccionadaExtra = mesaId;
+  productosSeleccionadosExtra = {};
+  
+  const mesa = mesasDisponibles.find(m => m.mesa === mesaId);
+  
+  if (mesa) {
+    document.getElementById('anadirMesaNombre').textContent = escHtml(mesa.nombre);
+    renderizarProductosMesa(mesa.lineas);
+    document.getElementById('anadirProductosContenedor').style.display = 'block';
+    document.getElementById('anadirResumen').style.display = 'block';
+  }
+  
+  renderizarMesasDisponibles();
+  actualizarResumenAnadir();
+}
+
+function renderizarProductosMesa(lineas) {
+  const container = document.getElementById('anadirProductosLista');
+  
+  if (!lineas.length) {
+    container.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted)">No hay productos pendientes</div>';
+    return;
+  }
+
+  const html = lineas.map(l => {
+    const cantidad = productosSeleccionadosExtra[l.producto_id] || 0;
+    return `
+      <div class="anadirmesa-producto-item">
+        <div class="anadirmesa-producto-info">
+          <div class="anadirmesa-producto-nombre">${escHtml(l.producto_nombre)}</div>
+          <div class="anadirmesa-producto-precio">${parseFloat(l.precio_unitario).toFixed(2).replace('.', ',')} €</div>
+          <div class="anadirmesa-producto-disponible">Disponible: ${l.cantidad_total}</div>
+        </div>
+        <div class="anadirmesa-qty-control">
+          <button class="anadirmesa-qty-btn" onclick="cambiarCantidadExtra(${l.producto_id}, -1, ${l.cantidad_total})">−</button>
+          <div class="anadirmesa-qty-display">${cantidad}</div>
+          <button class="anadirmesa-qty-btn" onclick="cambiarCantidadExtra(${l.producto_id}, 1, ${l.cantidad_total})">+</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = html;
+}
+
+function cambiarCantidadExtra(productoId, delta, max) {
+  const actual = productosSeleccionadosExtra[productoId] || 0;
+  const nueva = Math.min(max, Math.max(0, actual + delta));
+  
+  if (nueva === 0) {
+    delete productosSeleccionadosExtra[productoId];
+  } else {
+    productosSeleccionadosExtra[productoId] = nueva;
+  }
+  
+  const mesa = mesasDisponibles.find(m => m.mesa === mesaSeleccionadaExtra);
+  if (mesa) {
+    renderizarProductosMesa(mesa.lineas);
+  }
+  
+  actualizarResumenAnadir();
+}
+
+function actualizarResumenAnadir() {
+  const mesa = mesasDisponibles.find(m => m.mesa === mesaSeleccionadaExtra);
+  if (!mesa) return;
+  
+  let total = 0;
+  const items = [];
+  
+  Object.entries(productosSeleccionadosExtra).forEach(([productoId, cantidad]) => {
+    const linea = mesa.lineas.find(l => l.producto_id == productoId);
+    if (linea) {
+      const subtotal = cantidad * parseFloat(linea.precio_unitario);
+      total += subtotal;
+      items.push(`
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+          <span>${escHtml(linea.producto_nombre)} x${cantidad}</span>
+          <strong>${subtotal.toFixed(2).replace('.', ',')} €</strong>
+        </div>
+      `);
+    }
+  });
+  
+  document.getElementById('anadirResumenItems').innerHTML = items.join('');
+  document.getElementById('anadirResumenTotal').textContent = total.toFixed(2).replace('.', ',') + ' €';
+  document.getElementById('btnAnadirConfirmar').disabled = total === 0;
+}
+
+async function confirmarAnadirDesdeMesa() {
+  if (!mesaSeleccionadaExtra || Object.keys(productosSeleccionadosExtra).length === 0) {
+    mostrarToast('Selecciona productos', 'warning');
+    return;
+  }
+
+  try {
+    // Obtener la mesa seleccionada
+    const mesaSeleccionada = mesasDisponibles.find(m => m.mesa === mesaSeleccionadaExtra);
+    if (!mesaSeleccionada) {
+      mostrarToast('Error: Mesa no encontrada', 'error');
+      console.error('Mesa no encontrada:', mesaSeleccionadaExtra, 'en', mesasDisponibles);
+      return;
+    }
+    
+    // Bloquear la mesa extra
+    await API.estadoMesa(mesaSeleccionadaExtra, 'OCUPADA');
+    mesasBloquedadasExtra.push(mesaSeleccionadaExtra);
+    
+    // Preparar items para cobro combinado
+    const itemsExtra = Object.entries(productosSeleccionadosExtra).map(([productoId, cantidad]) => {
+      const linea = mesaSeleccionada.lineas.find(l => l.producto_id == productoId);
+      if (!linea) {
+        console.warn('Línea no encontrada para producto:', productoId);
+        return null;
+      }
+      return {
+        producto_id: parseInt(productoId),
+        cantidad: cantidad,
+        precio_unitario: parseFloat(linea.precio_unitario),
+        mesa_origen: mesaSeleccionadaExtra,
+        mesa_origen_nombre: mesaSeleccionada.nombre
+      };
+    }).filter(item => item !== null);
+    
+    // Almacenar items extra como agregados (intocables)
+    itemsExtraAnadidos = itemsExtra;
+    
+    cerrarModalAnadirMesa();
+    
+    // Actualizar pantalla de cobro para mostrar items extra
+    renderizarCobro();
+    recalcularSel();
+    
+    mostrarToast(`${itemsExtra.length} producto(s) añadido(s) desde ${mesaSeleccionada.nombre}`, 'success');
+  } catch (err) {
+    console.error('Error en confirmarAnadirDesdeMesa:', err);
+    mostrarToast('Error al bloquear mesa: ' + err.message, 'error');
+  }
+}
+
+function cerrarModalAnadirMesa() {
+  cerrarModal('modalAnadirDesdeMesa');
+  mesaSeleccionadaExtra = null;
+  productosSeleccionadosExtra = {};
+  document.getElementById('anadirProductosContenedor').style.display = 'none';
+  document.getElementById('anadirResumen').style.display = 'none';
+}
+
+async function liberarMesasExtrasBloqueadas() {
+  for (const mesaId of mesasBloquedadasExtra) {
+    try {
+      await API.estadoMesa(mesaId, 'DISPONIBLE');
+    } catch (err) {
+      console.warn('No se pudo liberar mesa extra:', mesaId, err);
+    }
+  }
+  mesasBloquedadasExtra = [];
+}
+
+
 document.addEventListener('DOMContentLoaded', async () => {
 
   try {
@@ -148,6 +367,9 @@ async function volverMesas(skipEstado = false) {
     }
   }
 
+  // Liberar mesas extras si quedan bloqueadas
+  await liberarMesasExtrasBloqueadas();
+
   mesaActiva = null;
 
   document.getElementById('vistaCobro').style.display = 'none';
@@ -157,6 +379,9 @@ async function volverMesas(skipEstado = false) {
 }
 
 async function volverAMesa() {
+  // Liberar mesas extras si quedan bloqueadas
+  await liberarMesasExtrasBloqueadas();
+  
   // Liberar la mesa y redirigir al index
   if (mesaActiva && !mesaCobrado) {
     try {
@@ -165,15 +390,29 @@ async function volverAMesa() {
       mostrarToast('No se pudo liberar la mesa: ' + err.message, 'error');
     }
   }
+  
+  // Limpiar variables de items extra
+  itemsExtraAnadidos = [];
+  window.itemsExtraParaCobro = null;
+  mesasBloquedadasExtra = [];
+  
   window.location.href = 'index.html';
 }
 
 function renderizarCobro() {
+  // Calcular total pendiente INCLUIDO items extra
+  let totalConExtra = totalPte;
+  if (itemsExtraAnadidos.length > 0) {
+    itemsExtraAnadidos.forEach(item => {
+      totalConExtra += item.cantidad * parseFloat(item.precio_unitario);
+    });
+  }
+
   document.getElementById('cobroTotalPte').textContent =
-    totalPte.toFixed(2).replace('.', ',') + ' €';
+    totalConExtra.toFixed(2).replace('.', ',') + ' €';
 
   document.getElementById('resumenPte').textContent =
-    totalPte.toFixed(2).replace('.', ',') + ' €';
+    totalConExtra.toFixed(2).replace('.', ',') + ' €';
 
   document.getElementById('resumenSel').textContent = '0,00 €';
 
@@ -181,7 +420,7 @@ function renderizarCobro() {
 
   const container = document.getElementById('cobroLineas');
 
-  if (!lineasCobro.length) {
+  if (!lineasCobro.length && itemsExtraAnadidos.length === 0) {
     container.innerHTML = `
       <div style="padding:24px;text-align:center;color:var(--text-light)">
         No hay artículos pendientes
@@ -244,6 +483,28 @@ function renderizarCobro() {
         ${pendientes.join('')}
       </div>
     ` : ''}
+    ${itemsExtraAnadidos.length > 0 ? `
+      <div class="cobro-group">
+        <div class="cobro-group-title" style="background:var(--blue-100);color:var(--blue-800);border-bottom:2px solid var(--blue-300)">🔗 De otras mesas (no modificables)</div>
+        ${itemsExtraAnadidos.map(item => `
+          <div class="cobro-articulo-row" style="opacity:0.7;background:var(--blue-50);border-left:3px solid var(--blue-600)">
+            <div class="cobro-art-info">
+              <div class="cobro-art-nombre">${escHtml(item.producto_nombre || 'Producto')}</div>
+              <div class="cobro-art-precio">
+                ${parseFloat(item.precio_unitario).toFixed(2).replace('.', ',')} €
+              </div>
+              <div class="cobro-art-meta">
+                <span style="color:var(--blue-700);font-weight:bold;">${item.cantidad} unidad(es) • De ${escHtml(item.mesa_origen_nombre)}</span>
+              </div>
+            </div>
+            <div class="cobro-art-total" style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+              <div>${(item.cantidad * parseFloat(item.precio_unitario)).toFixed(2).replace('.', ',')} €</div>
+              <button class="btn btn-sm btn-danger" onclick="eliminarItemExtra(${item.producto_id}, ${item.mesa_origen})" style="padding:4px 8px;font-size:12px;">🗑️ Quitar</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    ` : ''}
     ${cobradas.length > 0 ? `
       <div class="cobro-group">
         <div class="cobro-group-title">Artículos cobrados</div>
@@ -281,10 +542,41 @@ function recalcularSel() {
     }
   });
 
+  // Agregar items extra al total seleccionado
+  if (itemsExtraAnadidos.length > 0) {
+    itemsExtraAnadidos.forEach(item => {
+      total += item.cantidad * parseFloat(item.precio_unitario);
+    });
+  }
+
   document.getElementById('resumenSel').textContent =
     total.toFixed(2).replace('.', ',') + ' €';
 
   document.getElementById('btnCobrarSel').disabled = total === 0;
+}
+
+function eliminarItemExtra(productoId, mesaOrigen) {
+  // Eliminar item extra de la lista
+  itemsExtraAnadidos = itemsExtraAnadidos.filter(item => 
+    !(item.producto_id === productoId && item.mesa_origen === mesaOrigen)
+  );
+  
+  // Si no hay más items extra, liberar la mesa bloqueada
+  if (itemsExtraAnadidos.length === 0) {
+    const idx = mesasBloquedadasExtra.indexOf(mesaOrigen);
+    if (idx > -1) {
+      mesasBloquedadasExtra.splice(idx, 1);
+      // Liberar mesa en BD
+      API.estadoMesa(mesaOrigen, 'DISPONIBLE').catch(err => 
+        console.warn('No se pudo liberar mesa:', mesaOrigen, err)
+      );
+    }
+  }
+  
+  // Actualizar pantalla
+  renderizarCobro();
+  recalcularSel();
+  mostrarToast('Producto removido', 'info');
 }
 
 function abrirConfirmar(tipo) {
@@ -411,6 +703,17 @@ function handleCobroUnload() {
   if (mesaActiva && !mesaCobrado) {
     liberarMesaCobroSync();
   }
+  // Intentar liberar mesas extras también
+  if (mesasBloquedadasExtra.length > 0) {
+    mesasBloquedadasExtra.forEach(mesaId => {
+      fetch('api/mesas.php?action=estado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: mesaId, estado: 'DISPONIBLE' }),
+        keepalive: true
+      }).catch(() => {});
+    });
+  }
 }
 
 window.addEventListener('beforeunload', handleCobroUnload);
@@ -426,6 +729,7 @@ async function ejecutarCobro() {
   setLoader(true);
   
   const facturarCompleto = accionPendiente === 'todo' && document.getElementById('checkFacturaCompleta').checked;
+  const itemsExtra = itemsExtraAnadidos || [];
   
   try {
     const res = await API.cobrarMesa(mesaActiva, 
@@ -437,7 +741,40 @@ async function ejecutarCobro() {
     ticketQueue = [];
     const mesaCobrada = res.mesa_cobrada === true;
     
-    // Si la mesa está cobrada, actualizar su estado a COBRADA
+    // Si hay items extra, procesarlos también
+    if (itemsExtra.length > 0) {
+      for (const item of itemsExtra) {
+        try {
+          const resExtra = await API.cobrarMesa(item.mesa_origen, 
+            [{ producto_id: item.producto_id, cantidad: item.cantidad, precio_unitario: item.precio_unitario }],
+            item.cantidad * item.precio_unitario,
+            false
+          );
+          if (resExtra.ticket) {
+            // Marcar ticket con origen
+            resExtra.ticket.titulo = `Cobro - ${escHtml(item.mesa_origen_nombre)}`;
+            resExtra.ticket.mesa_origen = item.mesa_origen;
+            ticketQueue.push(resExtra.ticket);
+          }
+        } catch (err) {
+          console.warn('Error cobrar mesa extra:', item.mesa_origen, err);
+        }
+      }
+    }
+    
+    // Agregar ticket principal
+    if (res.ticket) {
+      res.ticket.titulo = `Cobro - ${document.getElementById('cobroMesaNombre').textContent}`;
+      ticketQueue.unshift(res.ticket);
+    }
+    
+    // Si es cobro total y completo, agregar ticket de resumen
+    if (facturarCompleto && res.ticket_completo) {
+      res.ticket_completo.titulo = 'Ticket completo de mesa';
+      ticketQueue.push(res.ticket_completo);
+    }
+    
+    // Si la mesa está cobrada, actualizar estado
     if (mesaCobrada) {
       try {
         await API.estadoMesa(mesaActiva, 'COBRADA');
@@ -450,26 +787,31 @@ async function ejecutarCobro() {
 
     reloadAfterTickets = accionPendiente === 'todo' && !mesaCobrada;
     
-    // Si es cobro parcial, ir a index después
+    // Si es cobro parcial, ir a index INMEDIATAMENTE (sin esperar tickets)
     if (accionPendiente === 'seleccion') {
       ticketReturnToIndex = true;
+      // Redirigir sin esperar tickets
+      setLoader(false);
+      liberarMesaCobro().finally(() => {
+        window.location.href = 'index.html';
+      });
+      // Procesar tickets en background
+      if (ticketQueue.length) {
+        procesarTicketQueueBackground();
+      }
+      return;
     }
     
-    // Siempre añadir ticket si existe (tanto cobro total como parcial)
-    if (res.ticket) ticketQueue.push(res.ticket);
-    
-    // Si es cobro completo y quiere factura, añadir ticket completo
-    if (facturarCompleto && res.ticket_completo) {
-      ticketQueue.push(res.ticket_completo);
-    }
+    // Liberar mesas extras después de cobrarlas
+    await liberarMesasExtrasBloqueadas();
+    itemsExtraAnadidos = [];
 
-    // Procesar cola de tickets SIEMPRE si hay tickets, sin importar el tipo de cobro
+    // Procesar cola de tickets
     if (ticketQueue.length) {
       procesarTicketQueue();
     } else {
       mostrarToast('Cobro registrado', 'success');
       if (mesaCobrada) {
-        // Mesa completamente cobrada: ir al index
         setTimeout(() => {
           window.location.href = 'index.html';
         }, 1200);
@@ -482,7 +824,11 @@ async function ejecutarCobro() {
         await entrarMesa(mesaActiva, document.getElementById('cobroMesaNombre').textContent);
       }
     }
-  } catch (err) { mostrarToast('Error: ' + err.message, 'error'); }
+  } catch (err) { 
+    mostrarToast('Error: ' + err.message, 'error');
+    // Liberar mesas extras en caso de error
+    await liberarMesasExtrasBloqueadas();
+  }
   finally { setLoader(false); }
 }
 
@@ -510,14 +856,16 @@ function buildTicketHtml(ticket) {
       <td style="text-align:right">${parseFloat(l.subtotal).toFixed(2).replace('.', ',')} €</td>
     </tr>`).join('');
 
+  const tituloMesa = ticket.titulo ? `<div class="ticket-titulo">${escHtml(ticket.titulo)}</div>` : '';
+
   return `
     <div class="ticket-wrap">
       <div class="ticket-nombre-bar">${escHtml(nombre)}</div>
       <div class="ticket-fecha">${ticket.fecha}</div>
       <div class="ticket-mesa">Mesa: ${escHtml(ticket.mesa)}</div>
       <div class="ticket-sep">────────────────────</div>
-      <div class="ticket-titulo">${escHtml(ticket.titulo || 'Ticket')}</div>
-      <div class="ticket-sep">────────────────────</div>
+      ${tituloMesa}
+      ${tituloMesa ? '<div class="ticket-sep">────────────────────</div>' : ''}
       <table class="ticket-tabla">
         <thead>
           <tr>
@@ -575,6 +923,39 @@ function procesarTicketQueue() {
 
   const ticket = ticketQueue.shift();
   mostrarTicket(ticket, true);
+}
+
+function procesarTicketQueueBackground() {
+  // Imprime tickets en background sin mostrar modal
+  if (!ticketQueue.length) return;
+  
+  const ticket = ticketQueue.shift();
+  
+  // Simular contenido del ticket para imprimir
+  const contenido = buildTicketHtml(ticket);
+  const ventana = window.open('', '_blank', 'width=400,height=600');
+  ventana.document.write(`
+    <!DOCTYPE html><html><head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: monospace; font-size: 12px; margin: 0; padding: 10px; }
+      table { width: 100%; border-collapse: collapse; }
+      td { padding: 4px 0; }
+    </style>
+    </head><body>${contenido}</body></html>
+  `);
+  ventana.document.close();
+  
+  // Auto-imprimir
+  setTimeout(() => {
+    ventana.print();
+    ventana.close();
+    
+    // Procesar siguiente ticket
+    setTimeout(() => {
+      procesarTicketQueueBackground();
+    }, 500);
+  }, 500);
 }
 
 function cerrarTicket() {

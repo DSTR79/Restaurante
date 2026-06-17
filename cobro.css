@@ -269,7 +269,7 @@
 
 /* BOTONES */
 .cobro-qty-btn,
-.qty-btn {
+ qty-btn {
   width: 42px;
   height: 42px;
 
@@ -292,7 +292,7 @@
 }
 
 .cobro-qty-btn:hover,
-.qty-btn:hover {
+ qty-btn:hover {
   background: var(--brown-800);
   transform: scale(1.05);
 }
@@ -413,4 +413,109 @@
     height: 48px;
     font-size: 24px;
   }
+}
+
+/* =========================
+   MODAL AÑADIR DESDE MESA
+========================= */
+
+.modal-anadirmesa {
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.anadirmesa-mesas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.anadirmesa-mesa-btn {
+  padding: 12px;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: center;
+  transition: all .2s;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.anadirmesa-mesa-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.anadirmesa-mesa-btn.active {
+  background: var(--brown-700);
+  color: white;
+  border-color: var(--brown-700);
+}
+
+.anadirmesa-producto-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.anadirmesa-producto-info {
+  flex: 1;
+}
+
+.anadirmesa-producto-nombre {
+  font-weight: 700;
+  color: var(--brown-800);
+  margin-bottom: 2px;
+}
+
+.anadirmesa-producto-precio {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.anadirmesa-producto-disponible {
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: 4px;
+}
+
+.anadirmesa-qty-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.anadirmesa-qty-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: var(--brown-700);
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+}
+
+.anadirmesa-qty-btn:hover {
+  background: var(--brown-800);
+}
+
+.anadirmesa-qty-display {
+  min-width: 35px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
 }

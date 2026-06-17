@@ -28,6 +28,11 @@ const API = {
   getMesas() { return this._fetch(`${this.base}api/mesas_resumen.php`); },
   getDetalleMesa(id){ return this._fetch(`${this.base}api/mesas.php?action=detalle&id=${id}`); },
   getLineasCobro(id){ return this._fetch(`${this.base}api/mesas.php?action=lineas_cobro&id=${id}`); },
+  getMesasDisponiblesConLineas(mesaActiva) { 
+    const url = `${this.base}api/mesas.php?action=mesas_disponibles_con_lineas${mesaActiva ? '&mesa_activa=' + mesaActiva : ''}`;
+    console.log('API call:', url);
+    return this._fetch(url); 
+  },
   getCierreData() { return this._fetch(`${this.base}api/cierre.php?action=datos`); },
   getDispositivo() { return this._fetch(`${this.base}api/dispositivo.php`); },
   registrarDispositivo(nombre, password) { return this.post('api/dispositivo.php', { nombre, password }); },

@@ -836,6 +836,92 @@ function estadoMesa() {
     }
 }
 
+function obtenerMesasDisponiblesConLineas() {
+    global $pdo;
+    
+    try {
+        $mesaActiva = (int)($_GET['mesa_activa'] ?? $_POST['mesa_activa'] ?? 0);
+        
+        error_log("=== OBTENER MESAS DISPONIBLES ===");
+        error_log("Mesa activa: $mesaActiva");
+        
+        $sql = "SELECT m.MESA, m.NOMBRE_MESA, m.ESTADO_MESA, m.ABIERTO_POR
+                FROM MESAS m
+                WHERE m.ESTADO_MESA != 'COBRADA'";
+        
+        if ($mesaActiva > 0) {
+            $sql .= " AND m.MESA != $mesaActiva";
+        }
+        
+        error_log("Query: $sql");
+        
+        $stmt = $pdo->query($sql);
+        $mesas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        error_log("Mesas encontradas: " . count($mesas));
+        
+        $result = [];
+        
+        foreach ($mesas as $m) {
+            $id = (int)$m['MESA'];
+            
+            // Obtener líneas NO pagadas
+            $sqlLin = "SELECT l.REF_LIN, l.TEXTO_LIN, l.UNIDS, l.PV_LIN, l.COMANDA_LIN
+                       FROM LINEAS l
+                       WHERE l.MESA_LIN = $id AND COALESCE(l.ESTADO_LIN,'') != 'PAGADO'";
+            
+            $stmtLin = $pdo->query($sqlLin);
+            $lineas = $stmtLin->fetchAll(PDO::FETCH_ASSOC);
+            
+            if (count($lineas) == 0) {
+                error_log("Mesa $id: sin líneas pendientes");
+                continue;
+            }
+            
+            $total = 0;
+            $lineasFormato = [];
+            
+            foreach ($lineas as $lin) {
+                $unids = (int)$lin['UNIDS'];
+                $precio = (float)$lin['PV_LIN'];
+                $subtotal = $unids * $precio;
+                $total += $subtotal;
+                
+                $lineasFormato[] = [
+                    'producto_id' => (int)$lin['REF_LIN'],
+                    'producto_nombre' => (string)$lin['TEXTO_LIN'],
+                    'cantidad_total' => $unids,
+                    'cantidad_pagada' => 0,
+                    'precio_unitario' => $precio,
+                    'comanda_id' => (int)$lin['COMANDA_LIN']
+                ];
+            }
+            
+            error_log("Mesa $id: " . count($lineas) . " lineas, total=$total");
+            
+            if ($total > 0) {
+                $result[] = [
+                    'mesa' => $id,
+                    'nombre' => (string)$m['NOMBRE_MESA'],
+                    'estado' => (string)$m['ESTADO_MESA'],
+                    'total_pte' => $total,
+                    'abierto_por' => $m['ABIERTO_POR'],
+                    'lineas' => $lineasFormato
+                ];
+            }
+        }
+        
+        error_log("Resultado: " . count($result) . " mesas con consumo");
+        error_log("=== FIN ===");
+        
+        sendJson($result);
+        
+    } catch (Throwable $e) {
+        error_log("EXCEPCIÓN: " . $e->getMessage());
+        sendError($e->getMessage(), 500);
+    }
+}
+
 $action = $_REQUEST['action'] ?? null;
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -847,6 +933,19 @@ if ($action === null) {
         crearMesa();
     }
     sendError('Método no permitido', 405);
+}
+
+// Debug endpoint
+if ($action === 'debug_mesas') {
+    try {
+        $stmt = $pdo->query("SELECT m.MESA, m.NOMBRE_MESA, m.ESTADO_MESA, COUNT(l.LINEA) as num_lineas 
+                            FROM MESAS m 
+                            LEFT JOIN LINEAS l ON l.MESA_LIN = m.MESA 
+                            GROUP BY m.MESA");
+        sendJson($stmt->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Throwable $e) {
+        sendError($e->getMessage(), 500);
+    }
 }
 
 switch ($action) {
@@ -876,6 +975,9 @@ switch ($action) {
         break;
     case 'linea_id':
         actualizarLineaPorId();
+        break;
+    case 'mesas_disponibles_con_lineas':
+        obtenerMesasDisponiblesConLineas();
         break;
     case 'repetir':
         repetirLinea();

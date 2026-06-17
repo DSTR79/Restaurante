@@ -60,6 +60,10 @@
             💶 Cobrar selección
           </button>
           <button class="btn btn-outline btn-lg cobro-btn-accion"
+                  onclick="abrirAnadirDesdeMesa()">
+            🔗 Añadir desde otra mesa
+          </button>
+          <button class="btn btn-outline btn-lg cobro-btn-accion"
                   onclick="abrirDividir()">
             ➗ Dividir en partes
           </button>
@@ -114,6 +118,40 @@
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="cerrarModal('modalDividir')">Cancelar</button>
         <button class="btn btn-primary" onclick="cobrarParte()">✔ Calcular</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalAnadirDesdeMesa">
+    <div class="modal modal-anadirmesa">
+      <h3>🔗 Añadir desde otra mesa</h3>
+      <p class="modal-sub">Selecciona una mesa para agregar productos</p>
+      
+      <div id="anadirMesasContenedor" style="margin-bottom:16px;">
+        <div style="text-align:center;color:var(--text-muted);padding:20px">
+          Cargando mesas...
+        </div>
+      </div>
+
+      <div id="anadirProductosContenedor" style="display:none;margin-bottom:16px;">
+        <h4 style="font-size:14px;color:var(--brown-600);margin-bottom:10px;">
+          Productos de <strong id="anadirMesaNombre"></strong>
+        </h4>
+        <div id="anadirProductosLista" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:10px;"></div>
+      </div>
+
+      <div id="anadirResumen" style="display:none;background:var(--brown-50);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:16px;">
+        <div style="font-size:14px;color:var(--text-muted);margin-bottom:8px">Seleccionado desde otra mesa:</div>
+        <div id="anadirResumenItems"></div>
+        <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;font-weight:700;display:flex;justify-content:space-between;">
+          <span>Total a añadir:</span>
+          <span id="anadirResumenTotal">0,00 €</span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="cerrarModalAnadirMesa()">Cancelar</button>
+        <button class="btn btn-primary" id="btnAnadirConfirmar" disabled onclick="confirmarAnadirDesdeMesa()">✔ Añadir a cobro</button>
       </div>
     </div>
   </div>
