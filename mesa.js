@@ -793,38 +793,144 @@ function cerrarTicket() {
   }
 }
 
-function imprimirTicket(auto = false) {
-  const contenido = document.getElementById('ticketContenido').innerHTML;
-  const ventana = window.open('', '_blank', 'width=400,height=600');
-  ventana.document.write(`
-    <!DOCTYPE html><html><head>
-    <meta charset="UTF-8">
-    <title>Ticket</title>
-    <style>
-      body { font-family: monospace; font-size: 13px; margin: 20px; }
-      .ticket-nombre-bar { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 4px; }
-      .ticket-fecha, .ticket-mesa { text-align: center; font-size: 12px; color: #555; }
-      .ticket-sep { text-align: center; margin: 8px 0; color: #aaa; }
-      .ticket-tabla { width: 100%; border-collapse: collapse; margin: 8px 0; }
-      .ticket-tabla th { border-bottom: 1px solid #000; padding: 3px 4px; font-size: 12px; }
-      .ticket-tabla td { padding: 3px 4px; font-size: 12px; }
-      .ticket-total { font-size: 16px; font-weight: bold; text-align: right; margin-top: 8px; }
-      .ticket-gracias { text-align: center; margin-top: 12px; font-size: 12px; color: #777; }
-    </style>
-    </head><body>${contenido}</body></html>
-  `);
-  ventana.document.close();
-  ventana.focus();
-  setTimeout(() => {
-    ventana.print();
-    if (auto) {
-      ventana.close();
-      if (ticketReturnToIndex) {
-        ticketReturnToIndex = false;
-        window.location.href = 'index.html';
-      }
+const PRINT_URL = 'http://localhost:9100';
+
+function ticketToPlainText(ticket) {
+  const W = 32; // ancho chars para 80mm
+  const sep = '='.repeat(W);
+  const cent = s => s.length >= W ? s : ' '.repeat(Math.floor((W - s.length) / 2)) + s;
+  const pad  = (s, n) => String(s).padEnd(n);
+  const rpad = (s, n) => String(s).padStart(n);
+
+  const lines = [];
+  lines.push(cent(ticket.nombre || 'MI BAR'));
+  lines.push(cent(ticket.fecha || ''));
+  lines.push(cent('Mesa: ' + (ticket.mesa || '')));
+  lines.push(sep);
+
+  if (ticket.titulo) {
+    lines.push(cent(ticket.titulo));
+    lines.push(sep);
+  }
+
+  lines.push(pad('Articulo', 18) + rpad('Ud', 2) + ' ' + rpad('P.U.', 6) + ' ' + rpad('Total', 6));
+  lines.push(sep);
+
+  (ticket.lineas || []).forEach(l => {
+    const nombre = String(l.nombre).substring(0, 18);
+    const ud     = String(parseInt(l.cantidad));
+    const pu     = parseFloat(l.precio).toFixed(2).replace('.', ',');
+    const total  = parseFloat(l.subtotal).toFixed(2).replace('.', ',');
+    lines.push(pad(nombre, 18) + rpad(ud, 2) + ' ' + rpad(pu, 6) + ' ' + rpad(total, 6));
+  });
+
+  lines.push(sep);
+  lines.push(rpad('TOTAL: ' + parseFloat(ticket.total).toFixed(2).replace('.', ',') + ' EUR', W));
+  lines.push('');
+  lines.push(cent('Gracias por su visita!'));
+
+  return lines.join('\n');
+}
+
+async function imprimirDirecto(html, callback, ticketData) {
+  // Si no se pasan datos directos, extraer del DOM
+  if (!ticketData) {
+    ticketData = {
+      nombre: localStorage.getItem('bar_nombre') || 'MI BAR',
+      fecha:  '',
+      mesa:   '',
+      titulo: '',
+      lineas: [],
+      total:  0
+    };
+    const contenido = document.getElementById('ticketContenido');
+    if (contenido) {
+      const fechaEl = contenido.querySelector('.ticket-fecha');
+      const mesaEl  = contenido.querySelector('.ticket-mesa');
+      const tituloEl = contenido.querySelector('.ticket-titulo');
+      const totalEl = contenido.querySelector('.ticket-total');
+      if (fechaEl)  ticketData.fecha  = fechaEl.textContent.trim();
+      if (mesaEl)   ticketData.mesa   = mesaEl.textContent.replace(/^Mesa:\s*/i, '').trim();
+      if (tituloEl) ticketData.titulo = tituloEl.textContent.trim();
+      if (totalEl)  ticketData.total  = totalEl.textContent.replace(/[^0-9.,]/g, '').trim();
+      contenido.querySelectorAll('.ticket-tabla tbody tr').forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length >= 4) {
+          ticketData.lineas.push({
+            nombre:   tds[0].textContent.trim(),
+            cantidad: tds[1].textContent.trim(),
+            precio:   tds[2].textContent.replace('€','').trim(),
+            subtotal: tds[3].textContent.replace('€','').trim()
+          });
+        }
+      });
     }
+  }
+  const ticketText = ticketToPlainText(ticketData);
+  try {
+    const resp = await fetch(`${PRINT_URL}/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: ticketText })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      if (callback) callback();
+      return;
+    }
+  } catch (e) {
+    console.warn('Print listener no disponible, usando impresion del navegador');
+  }
+  imprimirEnIframe(html, callback);
+}
+
+function imprimirEnIframe(html, callback) {
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;border:none;';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+      if (callback) callback();
+    }, 500);
   }, 300);
+}
+
+function getTicketStyles(anchoPapel) {
+  return `@page { size: ${anchoPapel}mm auto; margin: 2mm 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: ${anchoPapel}mm; padding: 0; color: #000; background: #fff; }
+.ticket-nombre-bar { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 2px; line-height: 1.2; }
+.ticket-fecha, .ticket-mesa { text-align: center; font-size: 11px; color: #000; }
+.ticket-sep { text-align: center; margin: 4px 0; color: #000; font-size: 11px; }
+.ticket-tabla { width: 100%; border-collapse: collapse; margin: 4px 0; }
+.ticket-tabla th { border-bottom: 1px solid #000; padding: 2px 2px; font-size: 10px; text-align: left; }
+.ticket-tabla th:last-child { text-align: right; }
+.ticket-tabla td { padding: 2px 2px; font-size: 11px; }
+.ticket-tabla td:last-child { text-align: right; }
+.ticket-total { font-size: 14px; font-weight: bold; text-align: right; margin-top: 4px; }
+.ticket-gracias { text-align: center; margin-top: 8px; font-size: 10px; color: #000; }
+@media print { body { width: ${anchoPapel}mm; } }`;
+}
+
+async function imprimirTicket(auto = false) {
+  await ensurePrintListener();
+  const contenido = document.getElementById('ticketContenido').innerHTML;
+  const anchoPapel = 78;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${getTicketStyles(anchoPapel)}</style></head><body>${contenido}</body></html>`;
+
+  imprimirDirecto(html, auto ? () => {
+    if (ticketReturnToIndex) {
+      ticketReturnToIndex = false;
+      window.location.href = 'index.html';
+    }
+  } : null);
 }
 
 window.addEventListener('beforeunload', handleUnload);

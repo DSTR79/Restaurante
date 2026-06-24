@@ -98,6 +98,31 @@ function iniciarReloj(elId) {
   tick();
   setInterval(tick, 1000);
 }
+// --- Impresora POS-80C ---
+let printListenerOK = null;
+
+async function checkPrintListener() {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 1500);
+    const resp = await fetch('http://localhost:9100/ping', { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (resp.ok) { printListenerOK = true; return true; }
+  } catch (e) { /* offline */ }
+  printListenerOK = false;
+  return false;
+}
+
+async function ensurePrintListener() {
+  if (printListenerOK) return true;
+  const ok = await checkPrintListener();
+  if (ok) return true;
+  mostrarToast('Impresora offline. Abre iniciar_impresora.bat en drivers/', 'warning', 5000);
+  return false;
+}
+
+// Check al cargar pagina
+checkPrintListener();
 
 function mostrarToast(msg, tipo = 'info', duracion = 3000) {
   const container = document.getElementById('toastContainer');
