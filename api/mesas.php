@@ -295,6 +295,28 @@ function actualizarLinea() {
     }
 }
 
+function obtenerSiguienteNumeroFactura() {
+    global $pdo;
+    $stmt = $pdo->query('SELECT COALESCE(MAX(NUM_FACTURA), 0) + 1 FROM FACTURAS');
+    return (int)$stmt->fetchColumn();
+}
+
+function guardarFactura(int $numFactura, int $mesaId, string $mesaNombre, float $total, string $metodoPago, string $camarero, string $abiertoPor, $fechaApertura, array $lineas) {
+    global $pdo;
+    $stmt = $pdo->prepare('INSERT INTO FACTURAS (NUM_FACTURA, MESA_ID, MESA_NOMBRE, TOTAL, METODO_PAGO, CAMARERO, ABIERTO_POR, FECHA_APERTURA, LINEAS_JSON) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([
+        $numFactura,
+        $mesaId,
+        $mesaNombre,
+        $total,
+        $metodoPago,
+        $camarero,
+        $abiertoPor,
+        $fechaApertura,
+        json_encode($lineas, JSON_UNESCAPED_UNICODE),
+    ]);
+}
+
 function cobrarMesa() {
     global $pdo;
     $body = getJsonBody();
@@ -302,7 +324,9 @@ function cobrarMesa() {
     $id = $body['id'] ?? '';
     $items = $body['items'] ?? [];
     $todo = filter_var($body['todo'] ?? false, FILTER_VALIDATE_BOOLEAN);
-    $camarero = trim($body['camarero'] ?? 'Sin nombre');
+    $esFactura = filter_var($body['factura'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    $metodoPago = trim($body['metodo_pago'] ?? 'efectivo');
+    $camarero = trim($body['dispositivo'] ?? 'Sin nombre');
 
     if (!$id) {
         sendError('ID es obligatorio', 400);
@@ -478,26 +502,71 @@ function cobrarMesa() {
             'mesa_pendiente' => $mesaPendiente,
         ];
 
-        if ($mesaPendiente <= 0) {
-            $stmt = $pdo->prepare('SELECT a.TEXTO_ARTICULO AS nombre, l.REF_LIN AS producto_id, SUM(l.UNIDS) AS cantidad, l.PV_LIN AS precio, SUM(l.UNIDS * l.PV_LIN) AS subtotal FROM LINEAS l JOIN ARTICULOS a ON a.REF = l.REF_LIN WHERE l.MESA_LIN = ? AND l.ESTADO_LIN = "PAGADO" GROUP BY l.REF_LIN, l.PV_LIN ORDER BY nombre ASC');
-            $stmt->execute([$id]);
-            $lineasCompletas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // Consultar todas las líneas PAGADAS de la mesa (para factura y ticket completo)
+        $stmt = $pdo->prepare('SELECT a.TEXTO_ARTICULO AS nombre, l.REF_LIN AS producto_id, SUM(l.UNIDS) AS cantidad, l.PV_LIN AS precio, SUM(l.UNIDS * l.PV_LIN) AS subtotal FROM LINEAS l JOIN ARTICULOS a ON a.REF = l.REF_LIN WHERE l.MESA_LIN = ? AND l.ESTADO_LIN = "PAGADO" GROUP BY l.REF_LIN, l.PV_LIN ORDER BY nombre ASC');
+        $stmt->execute([$id]);
+        $lineasCompletas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $ticketCompleto = [
+        $ticketCompleto = [
+            'mesa' => $mesaNombre,
+            'fecha' => date('d/m/Y H:i:s'),
+            'lineas' => array_map(function ($linea) {
+                return [
+                    'nombre' => $linea['nombre'],
+                    'cantidad' => (int)$linea['cantidad'],
+                    'precio' => floatval($linea['precio']),
+                    'subtotal' => floatval($linea['subtotal']),
+                ];
+            }, $lineasCompletas),
+            'total' => number_format(array_reduce($lineasCompletas, fn($s, $l) => $s + floatval($l['subtotal']), 0), 2, '.', ''),
+            'titulo' => 'Ticket completo de mesa',
+        ];
+
+        // Solo incluir ticket_completo si la mesa quedó totalmente cobrada (sin pendiente)
+        if ($mesaPendiente <= 0) {
+            $response['ticket_completo'] = $ticketCompleto;
+        }
+
+        // --- FACTURA ---
+        if ($esFactura) {
+            // Obtener datos de la mesa
+            $stmt = $pdo->prepare('SELECT NOMBRE_MESA, ABIERTO_POR, FECHA_APERTURA FROM MESAS WHERE MESA = ?');
+            $stmt->execute([$id]);
+            $datosMesa = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $numFactura = obtenerSiguienteNumeroFactura();
+            $abiertoPor = $camarero; // camarero = nombre del dispositivo
+
+            // Factura SIEMPRE con TODAS las líneas pagadas (incluye las que ya estaban cobradas)
+            $lineasFactura = $ticketCompleto['lineas'];
+            $totalFactura = floatval($ticketCompleto['total']);
+
+            $facturaData = [
+                'num_factura' => $numFactura,
                 'mesa' => $mesaNombre,
                 'fecha' => date('d/m/Y H:i:s'),
-                'lineas' => array_map(function ($linea) {
-                    return [
-                        'nombre' => $linea['nombre'],
-                        'cantidad' => (int)$linea['cantidad'],
-                        'precio' => floatval($linea['precio']),
-                        'subtotal' => floatval($linea['subtotal']),
-                    ];
-                }, $lineasCompletas),
-                'total' => number_format(array_reduce($lineasCompletas, fn($s, $l) => $s + floatval($l['subtotal']), 0), 2, '.', ''),
-                'titulo' => 'Ticket completo de mesa',
+                'lineas' => $lineasFactura,
+                'total' => $totalFactura,
+                'metodo_pago' => $metodoPago,
+                'camarero' => $camarero,
+                'abierto_por' => $abiertoPor,
+                'fecha_apertura' => $datosMesa['FECHA_APERTURA'] ?? null,
             ];
-            $response['ticket_completo'] = $ticketCompleto;
+
+            // Guardar en BD
+            guardarFactura(
+                $numFactura,
+                (int)$id,
+                $mesaNombre,
+                $totalFactura,
+                $metodoPago,
+                $camarero,
+                $abiertoPor,
+                $datosMesa['FECHA_APERTURA'] ?? null,
+                $lineasFactura
+            );
+
+            $response['factura'] = $facturaData;
         }
 
         sendJson($response);

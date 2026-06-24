@@ -44,8 +44,8 @@ const API = {
   actualizarLinea(id, producto_id, cantidad, comanda_id) {
     return this.post('api/mesas.php?action=linea', { id, producto_id, cantidad, comanda_id });
   },
-  cobrarMesa(id, items, total, todo) {
-    return this.post('api/mesas.php?action=cobrar', { id, items, total, todo });
+  cobrarMesa(id, items, total, todo, factura = false, metodo_pago = 'efectivo', dispositivo = 'Sin nombre') {
+    return this.post('api/mesas.php?action=cobrar', { id, items, total, todo, factura, metodo_pago, dispositivo });
   },
   estadoMesa(id, estado) {
     return this.post('api/mesas.php?action=estado', { id, estado });

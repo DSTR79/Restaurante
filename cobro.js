@@ -1,4 +1,4 @@
-const params = new URLSearchParams(window.location.search);
+﻿const params = new URLSearchParams(window.location.search);
 
 let mesaActiva = params.get('id') || null;
 let currentComandaId = null;
@@ -699,11 +699,16 @@ async function ejecutarCobro() {
   const facturarCompleto = accionPendiente === 'todo' && document.getElementById('checkFacturaCompleta').checked;
   const itemsExtra = itemsExtraAnadidos || [];
   
+  const dispositivo = obtenerNombreDispositivo() || 'Sin nombre';
+
   try {
     const res = await API.cobrarMesa(mesaActiva, 
       accionPendiente === 'todo' ? [] : obtenerItemsSeleccionados(),
       accionPendiente === 'todo' ? 0 : obtenerTotalSeleccionado(),
-      accionPendiente === 'todo'
+      accionPendiente === 'todo',
+      facturarCompleto,
+      metodoPagoSeleccionado,
+      dispositivo
     );
 
     ticketQueue = [];
@@ -730,13 +735,46 @@ async function ejecutarCobro() {
     }
     
     if (res.ticket) {
-      res.ticket.titulo = `Cobro - ${document.getElementById('cobroMesaNombre').textContent}`;
-      ticketQueue.unshift(res.ticket);
+      // Siempre asegurar que el ticket de cobro tiene el nombre de la mesa
+      res.ticket.mesa = document.getElementById('cobroMesaNombre').textContent || res.ticket.mesa || ('Mesa ' + mesaActiva);
+      if (!res.factura) {
+        // Sin factura: solo ticket de cobro
+        res.ticket.titulo = `Cobro - ${res.ticket.mesa}`;
+        ticketQueue.unshift(res.ticket);
+      } else {
+        // Con factura: ticket de cobro (lo que se paga ahora) + ticket factura (todo)
+        res.ticket.titulo = `Cobro - ${res.ticket.mesa}`;
+        ticketQueue.push(res.ticket);
+      }
     }
     
-    if (facturarCompleto && res.ticket_completo) {
+    if (facturarCompleto && res.ticket_completo && !res.factura) {
       res.ticket_completo.titulo = 'Ticket completo de mesa';
       ticketQueue.push(res.ticket_completo);
+    }
+    
+    // Si se pidió factura, añadir ticket de factura
+    if (res.factura) {
+      const f = res.factura;
+      const ticketFactura = {
+        titulo: '--- FACTURA ---',
+        mesa: f.mesa,
+        fecha: f.fecha,
+        num_factura: f.num_factura,
+        metodo_pago: f.metodo_pago,
+        camarero: f.camarero,
+        abierto_por: f.abierto_por,
+        fecha_apertura: f.fecha_apertura,
+        lineas: f.lineas.map(l => ({
+          nombre: l.nombre,
+          cantidad: parseInt(l.cantidad),
+          precio: parseFloat(l.precio),
+          subtotal: parseFloat(l.subtotal),
+        })),
+        total: parseFloat(f.total),
+        esFactura: true,
+      };
+      ticketQueue.push(ticketFactura);
     }
     
     if (mesaCobrada) {
@@ -808,6 +846,8 @@ function obtenerTotalSeleccionado() {
 
 function buildTicketHtml(ticket) {
   const nombre = localStorage.getItem('bar_nombre') || 'MI BAR';
+  const esFactura = ticket.esFactura === true;
+
   const lineas = ticket.lineas.map(l => `
     <tr>
       <td>${escHtml(l.nombre)}</td>
@@ -816,14 +856,32 @@ function buildTicketHtml(ticket) {
       <td style="text-align:right">${parseFloat(l.subtotal).toFixed(2).replace('.', ',')} €</td>
     </tr>`).join('');
 
-  const tituloMesa = ticket.titulo ? `<div class="ticket-titulo">${escHtml(ticket.titulo)}</div>` : '';
+  const tituloMesa = ticket.titulo && !esFactura ? `<div class="ticket-titulo">${escHtml(ticket.titulo)}</div>` : '';
+
+  let facturaHeader = '';
+  let facturaFooter = '';
+  if (esFactura) {
+    facturaHeader = `
+      <div class="ticket-titulo" style="font-size:16px;font-weight:bold;letter-spacing:2px;margin-bottom:8px">FACTURA Nº ${String(ticket.num_factura).padStart(6, '0')}</div>
+      <div class="ticket-sep">════════════════════════════</div>
+      <div class="ticket-factura-num">Mesa: <strong>${escHtml(ticket.mesa)}</strong></div>
+      ${ticket.camarero ? `<div class="ticket-factura-num">Cobrado por: ${escHtml(ticket.camarero)}</div>` : ''}
+      ${ticket.fecha_apertura ? `<div class="ticket-factura-num">Apertura: ${escHtml(ticket.fecha_apertura)}</div>` : ''}
+      <div class="ticket-sep">════════════════════════════</div>
+    `;
+    facturaFooter = `
+      <div class="ticket-sep">════════════════════════════</div>
+      <div class="ticket-factura-num">Pago: <strong>${escHtml(ticket.metodo_pago === 'tarjeta' ? 'Tarjeta' : 'Efectivo')}</strong></div>
+    `;
+  }
 
   return `
     <div class="ticket-wrap">
       <div class="ticket-nombre-bar">${escHtml(nombre)}</div>
       <div class="ticket-fecha">${ticket.fecha}</div>
-      <div class="ticket-mesa">Mesa: ${escHtml(ticket.mesa)}</div>
-      <div class="ticket-sep">────────────────────</div>
+      ${facturaHeader}
+      <div class="ticket-mesa">${esFactura ? '' : 'Mesa: ' + escHtml(ticket.mesa)}</div>
+      ${!esFactura ? '<div class="ticket-sep">────────────────────</div>' : ''}
       ${tituloMesa}
       ${tituloMesa ? '<div class="ticket-sep">────────────────────</div>' : ''}
       <table class="ticket-tabla">
@@ -839,7 +897,8 @@ function buildTicketHtml(ticket) {
       </table>
       <div class="ticket-sep">────────────────────</div>
       <div class="ticket-total">TOTAL: ${parseFloat(ticket.total).toFixed(2).replace('.', ',')} €</div>
-      <div class="ticket-gracias">¡Gracias por su visita!</div>
+      ${facturaFooter}
+      <div class="ticket-gracias">${esFactura ? 'Gracias por su compra' : '¡Gracias por su visita!'}</div>
     </div>`;
 }
 
@@ -937,23 +996,36 @@ const PRINT_URL = 'http://localhost:9100';
 function ticketToPlainText(ticket) {
   const W = 32; // ancho chars para 80mm
   const sep = '='.repeat(W);
+  const lineSep = '-'.repeat(W);
   const cent = s => s.length >= W ? s : ' '.repeat(Math.floor((W - s.length) / 2)) + s;
   const pad  = (s, n) => String(s).padEnd(n);
   const rpad = (s, n) => String(s).padStart(n);
+  const esFactura = ticket.esFactura === true;
 
   const lines = [];
   lines.push(cent(ticket.nombre || 'MI BAR'));
   lines.push(cent(ticket.fecha || ''));
-  lines.push(cent('Mesa: ' + (ticket.mesa || '')));
-  lines.push(sep);
 
-  if (ticket.titulo) {
+  if (esFactura) {
+    lines.push(sep);
+    lines.push(cent('*** FACTURA Nº ' + String(ticket.num_factura).padStart(6, '0') + ' ***'));
+    lines.push(sep);
+    lines.push('Mesa: ' + (ticket.mesa || ''));
+    if (ticket.camarero) lines.push('Cobrado por: ' + ticket.camarero);
+    if (ticket.fecha_apertura) lines.push('Apertura: ' + ticket.fecha_apertura);
+    lines.push(sep);
+  } else {
+    lines.push(cent('Mesa: ' + (ticket.mesa || '')));
+    lines.push(sep);
+  }
+
+  if (ticket.titulo && !esFactura) {
     lines.push(cent(ticket.titulo));
     lines.push(sep);
   }
 
   lines.push(pad('Articulo', 18) + rpad('Ud', 2) + ' ' + rpad('P.U.', 6) + ' ' + rpad('Total', 6));
-  lines.push(sep);
+  lines.push(lineSep);
 
   (ticket.lineas || []).forEach(l => {
     const nombre = String(l.nombre).substring(0, 18);
@@ -965,8 +1037,11 @@ function ticketToPlainText(ticket) {
 
   lines.push(sep);
   lines.push(rpad('TOTAL: ' + parseFloat(ticket.total).toFixed(2).replace('.', ',') + ' EUR', W));
+  if (esFactura) {
+    lines.push('Pago: ' + (ticket.metodo_pago === 'tarjeta' ? 'Tarjeta' : 'Efectivo'));
+  }
   lines.push('');
-  lines.push(cent('Gracias por su visita!'));
+  lines.push(cent(esFactura ? 'Gracias por su compra' : 'Gracias por su visita!'));
 
   return lines.join('\n');
 }
@@ -1055,6 +1130,7 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: $
 .ticket-tabla td { padding: 2px 2px; font-size: 11px; }
 .ticket-tabla td:last-child { text-align: right; }
 .ticket-total { font-size: 14px; font-weight: bold; text-align: right; margin-top: 4px; }
+.ticket-factura-num { text-align: left; font-size: 11px; color: #000; margin: 1px 0; }
 .ticket-gracias { text-align: center; margin-top: 8px; font-size: 10px; color: #000; }
 @media print { body { width: ${anchoPapel}mm; } }`;
 }
