@@ -1,0 +1,86 @@
+# ⚡ CHEAT SHEET - Deploy a Otra Sucursal
+
+## ✅ Qué llevar
+
+```
+📦 Carpeta BAR completa
+  ✓ api/
+  ✓ sounds/
+  ✓ *.html (index, mesa, cobro, etc)
+  ✓ *.js (api.js, mesa.js, cobro.js, etc)
+  ✓ *.css
+  ✓ config.json ← EDITAR CON IPs LOCALES
+  ✗ drivers/ (NO - obsoleto)
+  ✗ mock-printer.js (NO - testing only)
+  ✗ test-impresoras.html (NO - testing only)
+```
+
+## ❌ NO Necesitas Drivers
+
+**Impresoras POS-80C tienen drivers TCP/IP integrados.**
+- Puerto 9100 abierto por defecto
+- No necesita software extra
+- Solo IP + puerto en config.json
+
+## 🔧 Pasos Rápidos
+
+### 1. Red (5 min)
+```
+Impresora → Network Settings → DHCP OFF
+  IP: 192.168.2.78 (o la que sea)
+  Máscara: 255.255.255.0
+  Save
+```
+
+### 2. Código (2 min)
+```json
+// config.json - EDITAR ESTOS CAMPOS
+"bar": {
+  "nombre": "pruebanombre",      ← Tu nombre de bar
+  "direccion": "",
+  "telefono": "",
+  "logo_url": ""
+},
+"printers": {
+  "barra": {"ip": "192.168.2.78", "port": 9100, "timeout": 5},
+  "cocina": {"ip": "192.168.2.79", "port": 9100, "timeout": 5},
+  "cobro": {"ip": "192.168.2.80", "port": 9100, "timeout": 5}
+}
+```
+
+### 3. Test (1 min)
+```
+Navegador: http://192.168.X.X/bar/
+Crear mesa → agregar producto → guardar
+Verificar ticket en impresora ✓
+```
+
+## 📋 BD Check
+
+```sql
+-- Verificar DESTINO_ART existe
+SELECT DESTINO_ART FROM ARTICULOS LIMIT 1;
+
+-- Si no existe, agregar
+ALTER TABLE ARTICULOS ADD COLUMN DESTINO_ART INT DEFAULT 1;
+```
+
+## 🚨 Si no funciona
+
+| Problema | Solución |
+|----------|----------|
+| No imprime | `ping 192.168.2.78` → IP correcta en config.json |
+| DHCP activo | Panel impresora → Network → DHCP OFF |
+| Firewall | Deshabilitar temporalmente puerto 9100 |
+| BD sin destinos | `ALTER TABLE ARTICULOS ADD COLUMN DESTINO_ART INT` |
+
+## 💾 Llevar
+
+- [ ] Carpeta `bar/` completa (sin drivers/)
+- [ ] Archivo `config.json` vacío para editar
+- [ ] Este cheat sheet
+- [ ] Manual INSTALL.md (si necesitas referencias)
+
+---
+
+**Resumen:** IP estática en impresora + editar config.json + copiar carpeta = DONE

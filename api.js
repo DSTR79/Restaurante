@@ -1,3 +1,54 @@
+// ============================================================
+// CONFIGURACION GLOBAL DEL BAR
+// ============================================================
+let CONFIG = {
+  bar: {
+    nombre: 'Mi Bar',
+    direccion: '',
+    telefono: '',
+    logo_url: ''
+  },
+  printers: {}
+};
+
+async function cargarConfig() {
+  try {
+    const res = await fetch('config.json');
+    CONFIG = await res.json();
+    
+    // Esperar a que DOM esté listo
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        actualizarDOMConfig();
+      });
+    } else {
+      actualizarDOMConfig();
+    }
+    
+    console.log('✓ Config cargada:', CONFIG.bar.nombre);
+  } catch (err) {
+    console.error('Error cargando config.json:', err);
+  }
+}
+
+function actualizarDOMConfig() {
+  // Actualizar título de página
+  const pageTitle = document.getElementById('pageTitle');
+  if (pageTitle) {
+    pageTitle.textContent = CONFIG.bar.nombre + ' - Gestion de Mesas';
+  }
+  
+  // Actualizar nombre en header
+  const barName = document.getElementById('barName');
+  if (barName) {
+    barName.textContent = CONFIG.bar.nombre;
+  }
+}
+
+
+// Cargar config al iniciar (inmediatamente)
+cargarConfig();
+
 const API = {
   base: '',
 
