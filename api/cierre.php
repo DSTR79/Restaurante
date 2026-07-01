@@ -2,6 +2,16 @@
 require_once 'db.php';
 header('Content-Type: application/json; charset=utf-8');
 
+// Cargar variables de entorno desde .env si existe
+if (file_exists(__DIR__ . '/../.env')) {
+    $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos($line, '#') === 0) continue;
+        list($key, $value) = explode('=', $line, 2);
+        putenv(trim($key) . '=' . trim($value));
+    }
+}
+
 function sendJson($payload, int $status = 200) {
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE);
@@ -14,6 +24,31 @@ function sendError(string $message, int $status = 400) {
 
 function getAction() {
     return $_REQUEST['action'] ?? 'datos';
+}
+
+// Endpoint de validación de contraseña
+$action = getAction();
+if ($action === 'validar_password') {
+    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    if ($method !== 'POST') {
+        sendError('Método no permitido', 405);
+    }
+    
+    $raw = file_get_contents('php://input');
+    $body = json_decode($raw, true);
+    $password = trim($body['password'] ?? '');
+    
+    if (!$password) {
+        sendError('Contraseña requerida', 400);
+    }
+    
+    $admin_password = getenv('ADMIN_PASSWORD');
+    if (!$admin_password) {
+        sendError('Error de configuración del servidor', 500);
+    }
+    
+    $valido = ($password === $admin_password);
+    sendJson(['valido' => $valido], $valido ? 200 : 403);
 }
 
 function ensureCierreTable(PDO $pdo) {

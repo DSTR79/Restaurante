@@ -21,7 +21,14 @@ if ($method === 'POST') {
         exit;
     }
 
-    if ($password !== '1234') {
+    $admin_password = getenv('ADMIN_PASSWORD');
+    if (!$admin_password) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Error de configuración: ADMIN_PASSWORD no definida']);
+        exit;
+    }
+
+    if ($password !== $admin_password) {
         http_response_code(403);
         echo json_encode(['error' => 'Contraseña de administrador incorrecta.']);
         exit;

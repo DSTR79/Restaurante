@@ -44,26 +44,66 @@ $PRINTER_TIMEOUT = $cobro_config['timeout'];
 
 /**
  * Enviar ticket via socket TCP (LPR/raw) a impresora en red
+ * Con reintentos automáticos y manejo robusto de sockets
+ * Incluye reset de impresora para evitar "cuelgues"
  */
-function sendToPrinterNetwork($ip, $port, $text, $timeout = 5) {
-    $ticketData = $text . "\x1B\x64\x06\x1D\x56\x00"; // avance 6 lineas + corte
+function sendToPrinterNetwork($ip, $port, $text, $timeout = 10, $retries = 3) {
+    // RESET previo: limpiar buffer de impresora (ESC @ = reset)
+    $resetCmd = "\x1B\x40"; // ESC @ = Reset
+    $ticketData = $resetCmd . $text . "\x1B\x64\x06\x1D\x56\x00"; // reset + ticket + corte
+    $lastError = '';
     
-    $socket = @fsockopen($ip, $port, $errno, $errstr, $timeout);
-    if (!$socket) {
-        return [
-            'success' => false,
-            'error' => "No se pudo conectar a $ip:$port. Error: $errstr ($errno)"
-        ];
+    for ($attempt = 1; $attempt <= $retries; $attempt++) {
+        $socket = @fsockopen($ip, $port, $errno, $errstr, $timeout);
+        
+        if (!$socket) {
+            $lastError = "Intento $attempt/$retries: No se pudo conectar a $ip:$port. Error: $errstr ($errno)";
+            // Esperar antes de reintentar (backoff exponencial)
+            if ($attempt < $retries) {
+                usleep(500000 * $attempt); // 0.5s, 1s, 1.5s...
+            }
+            continue;
+        }
+        
+        // Socket conectado. Asegurar que se cierre en cualquier caso
+        try {
+            // Establecer timeout de lectura/escritura
+            stream_set_timeout($socket, $timeout);
+            
+            // Intentar escribir
+            $sent = @fwrite($socket, $ticketData);
+            
+            if ($sent === false || $sent == 0) {
+                $lastError = "Intento $attempt/$retries: Error al escribir en socket";
+                @fclose($socket);
+                if ($attempt < $retries) {
+                    usleep(500000 * $attempt);
+                }
+                continue;
+            }
+            
+            // Dar MÁS tiempo para procesar reset + print + corte (aumentado)
+            usleep(500000); // 0.5s (antes era 0.1s)
+            
+            // Cerrar socket correctamente
+            @fclose($socket);
+            
+            return ['success' => true, 'attempt' => $attempt];
+            
+        } catch (Exception $e) {
+            $lastError = "Intento $attempt/$retries: Excepción: " . $e->getMessage();
+            @fclose($socket);
+            if ($attempt < $retries) {
+                usleep(500000 * $attempt);
+            }
+        }
     }
     
-    $sent = @fwrite($socket, $ticketData);
-    @fclose($socket);
-    
-    if ($sent === false) {
-        return ['success' => false, 'error' => 'Error al enviar datos a la impresora'];
-    }
-    
-    return ['success' => true];
+    return [
+        'success' => false,
+        'error' => $lastError,
+        'retries_attempted' => $retries
+    ];
 }
 
 /**
@@ -144,7 +184,7 @@ $printerCfg = getPrinterConfig($printerName);
 $result = sendToPrinterByConfig($printerCfg, $input['text']);
 
 if ($result['success']) {
-    echo json_encode(['success' => true]);
+    echo json_encode(['success' => true, 'attempt' => $result['attempt']]);
 } else {
     http_response_code(503);
     echo json_encode($result);

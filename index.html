@@ -2,10 +2,24 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="true" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Bar" />
+  <meta name="theme-color" content="#2C1A0E" />
+  <meta name="mobile-web-app-capable" content="true" />
   <title id="pageTitle">Bar - Gestion de Mesas</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="keyboard.css" />
+  <style>
+    /* Prevenir zoom accidental en inputs */
+    input, textarea, select { font-size: 16px !important; }
+    /* Prevenir comportamientos por defecto en iOS */
+    body { -webkit-user-select: none; -webkit-touch-callout: none; }
+    input, textarea { -webkit-user-select: text; }
+    /* Safe areas para notches */
+    .header { padding-left: max(24px, env(safe-area-inset-left)); padding-right: max(24px, env(safe-area-inset-right)); }
+  </style>
 </head>
 <body>
 

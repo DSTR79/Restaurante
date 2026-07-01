@@ -1,8 +1,12 @@
 const cierreAccessToken = 'bar_cierre_access';
-const cierreAccessExpiry = parseInt(localStorage.getItem(cierreAccessToken) || '0', 10);
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Validar que el token exista y no haya expirado
+  const cierreAccessExpiry = parseInt(localStorage.getItem(cierreAccessToken) || '0', 10);
+  
   if (!cierreAccessExpiry || Date.now() > cierreAccessExpiry) {
+    // Token expirado o no existe - redirigir sin permitir acceso
+    localStorage.removeItem(cierreAccessToken);
     window.location.href = 'index.html';
     return;
   }

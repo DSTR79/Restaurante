@@ -2,11 +2,21 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0"/>
+  <meta name="apple-mobile-web-app-capable" content="true"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Cobro"/>
+  <meta name="theme-color" content="#2C1A0E"/>
   <title>Cobro · Bar</title>
   <link rel="stylesheet" href="style.css"/>
   <link rel="stylesheet" href="cobro.css"/>
   <link rel="stylesheet" href="keyboard.css"/>
+  <style>
+    input, textarea, select { font-size: 16px !important; }
+    body { -webkit-user-select: none; -webkit-touch-callout: none; }
+    input, textarea { -webkit-user-select: text; }
+    .header { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  </style>
 </head>
 <body>
   <header class="header">

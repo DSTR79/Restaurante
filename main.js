@@ -1,6 +1,5 @@
 let mesaSeleccionadaId = null; 
-
-const ADMIN_CIERRE_PASSWORD = '1234';
+let ADMIN_CIERRE_PASSWORD = null;
 const ADMIN_CIERRE_EXPIRATION_MS = 10 * 60 * 1000;
 
 const MINUTOS_OCULTAR_PAGADA = 1;
@@ -36,6 +35,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     botonCierre.addEventListener('click', abrirCierrePassword);
   }
 
+  // IMPORTANTE: La contraseña nunca se carga en el cliente.
+  // Se valida en el servidor en el endpoint de cierre.
 });
 
 
@@ -211,15 +212,37 @@ function abrirCierrePassword() {
   setTimeout(() => document.getElementById('inputCierrePassword').focus(), 50);
 }
 
-function confirmarCierrePassword() {
+async function confirmarCierrePassword() {
   const password = document.getElementById('inputCierrePassword').value.trim();
-  if (password !== ADMIN_CIERRE_PASSWORD) {
-    mostrarToast('Contraseña incorrecta', 'error');
+  if (!password) {
+    mostrarToast('Introduce la contraseña', 'error');
     return;
   }
-  localStorage.setItem('bar_cierre_access', String(Date.now() + ADMIN_CIERRE_EXPIRATION_MS));
-  cerrarModal('modalCierrePassword');
-  window.open('cierre.html', '_blank', 'noopener');
+
+  try {
+    // Validar contraseña en el servidor
+    const response = await fetch('api/cierre.php?action=validar_password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok || !data.valido) {
+      mostrarToast('Contraseña incorrecta', 'error');
+      document.getElementById('inputCierrePassword').value = '';
+      return;
+    }
+
+    // Solo si es válida, permitir acceso
+    localStorage.setItem('bar_cierre_access', String(Date.now() + ADMIN_CIERRE_EXPIRATION_MS));
+    cerrarModal('modalCierrePassword');
+    window.open('cierre.html', '_blank', 'noopener');
+  } catch (err) {
+    mostrarToast('Error validando contraseña: ' + err.message, 'error');
+    document.getElementById('inputCierrePassword').value = '';
+  }
 }
 
 function escHtml(str) {

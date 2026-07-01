@@ -651,11 +651,21 @@ async function confirmarSalir() {
 }
 
 async function procesarTicketsAutomaticos(tickets) {
+  // Enviar tickets SECUENCIALMENTE para evitar flood de la impresora
   for (const ticket of tickets) {
     if (!ticket.lineas || ticket.lineas.length === 0) continue;
     
     const ticketHtml = construirTicketDestino(ticket);
-    enviarAImpresora(ticket.destino, ticketHtml);
+    // AWAIT para esperar a que se complete el envío antes de siguiente
+    try {
+      await enviarAImpresora(ticket.destino, ticketHtml);
+    } catch (err) {
+      console.error(`Error enviando ticket ${ticket.destino}:`, err);
+      // NO bloquear el flujo si falla un ticket
+    }
+    // Pausa MAYOR entre tickets para que la impresora procese completamente
+    // (print.php ahora hace reset, pero necesita tiempo)
+    await new Promise(r => setTimeout(r, 800));
   }
 }
 
@@ -691,33 +701,44 @@ function construirTicketDestino(ticket) {
     </div>`;
 }
 
-function enviarAImpresora(destino, ticketHtml) {
+async function enviarAImpresora(destino, ticketHtml) {
   const nombreDestino = destino === '1' ? 'BARRA' : (destino === '2' ? 'COCINA' : `DESTINO ${destino}`);
   const nombreImpresora = destino === '1' ? 'barra' : (destino === '2' ? 'cocina' : 'cobro');
   
   // Convertir HTML a texto plano para impresora
   const ticketTexto = construirTicketPlainText(ticketHtml, nombreDestino);
   
-  console.log(`[IMPRESORA] Enviando a ${nombreDestino} (${nombreImpresora})`);
+  console.log(`[IMPRESORA] Enviando a ${nombreDestino} (${nombreImpresora}), ${ticketTexto.length} bytes`);
   
-  // Enviar a api/print.php con destino específico
-  fetch(PRINT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text: ticketTexto,
-      printer: nombreImpresora
-    })
-  })
-  .then(res => res.json())
-  .then(data => {
+  try {
+    const response = await fetch(PRINT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: ticketTexto,
+        printer: nombreImpresora
+      })
+    });
+    
+    console.log(`[IMPRESORA] Response status: ${response.status}`);
+    
+    const data = await response.json();
+    
     if (data.success) {
-      console.log(`✓ Ticket impreso en ${nombreDestino}`);
+      console.log(`✓ Ticket impreso en ${nombreDestino} (intento ${data.attempt || 1})`);
+      return true;
     } else {
-      console.error(`✗ Error imprimiendo en ${nombreDestino}:`, data.error);
+      const errorMsg = data.error || (data.retries_attempted ? `Falló tras ${data.retries_attempted} intentos` : 'Error desconocido');
+      console.error(`✗ Error imprimiendo en ${nombreDestino}:`, errorMsg);
+      // Mostrar error visual pero no bloquear el flujo
+      mostrarToast(`Impresora ${nombreDestino}: ${errorMsg}`, 'warning');
+      return false;
     }
-  })
-  .catch(err => console.error(`✗ Error enviando a impresora ${nombreDestino}:`, err));
+  } catch (err) {
+    console.error(`✗ Error enviando a impresora ${nombreDestino}:`, err.message);
+    mostrarToast(`Error conectando a impresora ${nombreDestino}`, 'error');
+    return false;
+  }
 }
 
 function construirTicketPlainText(ticketHtml, destino) {
@@ -1049,18 +1070,8 @@ function bindEventos() {
 }
 
 async function salirMesa() {
-  // Si hay artículos sin cobrar EN MESA NORMAL, pedir nombre
-  if (!mesaRapida && lineas && lineas.length > 0) {
-    abrirModal('modalNombreMesa');
-    const input = document.getElementById('inputNombreMesa');
-    if (input) {
-      input.value = document.getElementById('mesaNombre')?.textContent || '';
-      setTimeout(() => input.focus(), 100);
-    }
-  } else {
-    // Sin artículos o mesa rápida, salir directo
-    confirmarSalirCancelando();
-  }
+  // Salir directo sin pedir nombre
+  confirmarSalirCancelando();
 }
 
 async function guardarMesaConNombre() {

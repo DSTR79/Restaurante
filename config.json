@@ -7,17 +7,17 @@
     "barra": {
       "ip": "192.168.2.78",
       "port": 9100,
-      "timeout": 5
+      "timeout": 10
     },
     "cocina": {
       "ip": "192.168.2.78",
       "port": 9100,
-      "timeout": 5
+      "timeout": 10
     },
     "cobro": {
       "ip": "192.168.2.78",
       "port": 9100,
-      "timeout": 5
+      "timeout": 10
     }
   },
   "local_name": "POS-80C Impresora Bar"

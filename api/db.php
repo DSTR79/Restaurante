@@ -1,12 +1,27 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 ini_set('display_errors', 1);
-//require_once 'db.php';
+
+// Cargar variables de entorno desde .env si existe
+if (file_exists(__DIR__ . '/../.env')) {
+    $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos($line, '#') === 0) continue;
+        list($key, $value) = explode('=', $line, 2);
+        putenv(trim($key) . '=' . trim($value));
+    }
+}
 
 $host = getenv('DB_HOST') ?: 'localhost';
 $user = getenv('DB_USER') ?: 'ramon';
-$pass = getenv('DB_PASSWORD') ?: 'laputadeoros';
+$pass = getenv('DB_PASSWORD');
 $db   = getenv('DB_NAME') ?: 'Restaurante';
+
+if (!$pass) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Error de configuración: DB_PASSWORD no definida']);
+    exit;
+}
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4", $user, $pass);

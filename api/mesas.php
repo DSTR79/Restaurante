@@ -262,8 +262,8 @@ function actualizarLinea() {
             sendError('Artículo no encontrado', 404);
         }
 
-        $stmt = $pdo->prepare('SELECT LINEA FROM LINEAS WHERE REF_LIN = ? AND MESA_LIN = ? AND COMANDA_LIN = ?');
-        $stmt->execute([$producto_id, $id, $comanda_id]);
+        $stmt = $pdo->prepare('SELECT LINEA FROM LINEAS WHERE REF_LIN = ? AND MESA_LIN = ? AND COMANDA_LIN = ? AND TEXTO_LIN = ?');
+        $stmt->execute([$producto_id, $id, $comanda_id, $articulo['TEXTO_ARTICULO']]);
         $linea = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($linea) {
@@ -600,26 +600,31 @@ function agregarComentario() {
 
         $textoBase = $linea['TEXTO_LIN'];
         $nuevoTexto = strtoupper($textoBase . ' ' . $comentario);
+        $unidsActuales = (int)$linea['UNIDS'];
 
-        if ((int)$linea['UNIDS'] <= 1) {
-            $stmt = $pdo->prepare('UPDATE LINEAS SET TEXTO_LIN = ? WHERE LINEA = ?');
-            $stmt->execute([$nuevoTexto, $linea_id]);
+        // Restar 1 de la original
+        if ($unidsActuales <= 1) {
+            // Si quedaba 1, borrar la línea
+            $stmt = $pdo->prepare('DELETE FROM LINEAS WHERE LINEA = ?');
+            $stmt->execute([$linea_id]);
         } else {
+            // Si quedaban más, restar 1
             $stmt = $pdo->prepare('UPDATE LINEAS SET UNIDS = UNIDS - 1 WHERE LINEA = ?');
             $stmt->execute([$linea_id]);
-
-            $stmt = $pdo->prepare('INSERT INTO LINEAS (COMANDA_LIN, MESA_LIN, REF_LIN, TEXTO_LIN, UNIDS, PV_LIN, IVA_LIN, BASE_LIN, ESTADO_LIN) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)');
-            $stmt->execute([
-                $comanda_id,
-                $mesa_id,
-                $linea['REF_LIN'],
-                $nuevoTexto,
-                $linea['PV_LIN'],
-                $linea['IVA_LIN'],
-                $linea['BASE_LIN'] / max(1, (int)$linea['UNIDS']),
-                $linea['ESTADO_LIN'],
-            ]);
         }
+
+        // Crear nueva línea con comentario
+        $stmt = $pdo->prepare('INSERT INTO LINEAS (COMANDA_LIN, MESA_LIN, REF_LIN, TEXTO_LIN, UNIDS, PV_LIN, IVA_LIN, BASE_LIN, ESTADO_LIN) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)');
+        $stmt->execute([
+            $comanda_id,
+            $mesa_id,
+            $linea['REF_LIN'],
+            $nuevoTexto,
+            $linea['PV_LIN'],
+            $linea['IVA_LIN'],
+            $linea['BASE_LIN'] / max(1, $unidsActuales),
+            $linea['ESTADO_LIN'],
+        ]);
 
         $stmt = $pdo->prepare('SELECT l.LINEA AS id, l.REF_LIN AS producto_id, l.UNIDS AS cantidad, l.PV_LIN AS precio_unitario, l.ESTADO_LIN AS estado, l.TEXTO_LIN AS producto_nombre, l.COMANDA_LIN AS comanda_id, (l.UNIDS * l.PV_LIN) AS subtotal FROM LINEAS l WHERE l.MESA_LIN = ? AND l.COMANDA_LIN = ? ORDER BY l.ESTADO_LIN ASC');
         $stmt->execute([$mesa_id, $comanda_id]);

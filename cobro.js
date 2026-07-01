@@ -1047,7 +1047,7 @@ function ticketToPlainText(ticket) {
   return lines.join('\n');
 }
 
-async function imprimirDirecto(html, callback, ticketData) {
+async function imprimirDirecto(html, callback, ticketData, printer = 'cobro') {
   // Si no se pasan datos directos, extraer del DOM
   if (!ticketData) {
     ticketData = {
@@ -1086,15 +1086,21 @@ async function imprimirDirecto(html, callback, ticketData) {
     const resp = await fetch(PRINT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: ticketText })
+      body: JSON.stringify({ 
+        text: ticketText,
+        printer: printer
+      })
     });
     const data = await resp.json();
     if (data.success) {
+      console.log(`✓ Ticket impreso en ${printer} (intento ${data.attempt || 1})`);
       if (callback) callback();
       return;
     }
+    console.error(`✗ Error imprimiendo:`, data.error);
     mostrarToast('Impresora: ' + (data.error || 'Error desconocido'), 'error', 8000);
   } catch (e) {
+    console.error('Error conectando:', e);
     mostrarToast('No se pudo conectar con el servidor de impresion. Comprueba la red.', 'error', 8000);
   }
   if (callback) callback();
