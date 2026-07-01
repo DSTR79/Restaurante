@@ -170,6 +170,18 @@ body.mesa-page-body {
 }
 .btn-outline:hover { background: var(--brown-50); border-color: var(--brown-400); }
 
+.btn-warning {
+  background: linear-gradient(135deg, #FFD700 0%, #FFC700 100%);
+  color: #1a0d06;
+  box-shadow: 0 4px 14px rgba(255, 215, 0, .45);
+  font-weight: 700;
+}
+.btn-warning:hover { 
+  background: linear-gradient(135deg, #FFED4E 0%, #FFD700 100%);
+  box-shadow: 0 6px 20px rgba(255, 215, 0, .55);
+  transform: translateY(-2px);
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--brown-300);

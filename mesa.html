@@ -73,7 +73,7 @@
         </div>
         <div class="pedido-footer">
           <div class="pedido-actions">
-            <button class="btn btn-success btn-lg" id="btnCobrar">✅ Cobrar mesa</button>
+            <button class="btn btn-warning btn-lg" id="btnCobrar">➜ Cobrar y salir</button>
           </div>
         </div>
       </div>
@@ -89,6 +89,18 @@
         <button class="btn btn-outline" onclick="cerrarModal('modalCobrarSeleccion')">Cancelar</button>
         <button class="btn btn-success" onclick="cobrarMesaCompleta()">Cobrar completa</button>
         <button class="btn btn-primary" onclick="cobrarMesaPorPartes()">Cobrar por partes</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalNombreMesa">
+    <div class="modal">
+      <h3>Nombre de la mesa</h3>
+      <p class="modal-sub">Quedan artículos sin cobrar. Ingresa nombre para guardar mesa.</p>
+      <input type="text" id="inputNombreMesa" class="search-input" placeholder="Ej: Mesa 5, Terraza..." autofocus />
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="cerrarModal('modalNombreMesa')">Cancelar</button>
+        <button class="btn btn-success" onclick="guardarMesaConNombre()">Guardar</button>
       </div>
     </div>
   </div>

@@ -905,6 +905,26 @@ function estadoMesa() {
     }
 }
 
+function renombrarMesa() {
+    global $pdo;
+    $body = getJsonBody();
+
+    $id = $body['id'] ?? null;
+    $nombre = $body['nombre'] ?? null;
+
+    if (!$id || !$nombre) {
+        sendError('Faltan datos: id y nombre requeridos', 400);
+    }
+
+    try {
+        $stmt = $pdo->prepare('UPDATE MESAS SET NOMBRE_MESA = ? WHERE MESA = ?');
+        $stmt->execute([$nombre, $id]);
+        sendJson(['success' => true]);
+    } catch (Throwable $e) {
+        sendError($e->getMessage(), 500);
+    }
+}
+
 function obtenerMesasDisponiblesConLineas() {
     global $pdo;
     
@@ -1038,6 +1058,9 @@ switch ($action) {
         break;
     case 'estado':
         estadoMesa();
+        break;
+    case 'renombrar':
+        renombrarMesa();
         break;
     default:
         sendError('Acción desconocida', 400);

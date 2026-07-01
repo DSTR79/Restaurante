@@ -569,7 +569,13 @@ async function eliminarLineaPorId(lineaId, productoId) {
 }
 
 function abrirCobrar() {
-  abrirModal('modalCobrarSeleccion');
+  if (mesaRapida) {
+    // Mesa rápida: cobrar directo sin modal
+    cobrarMesaCompleta();
+  } else {
+    // Mesa normal: mostrar opciones
+    abrirModal('modalCobrarSeleccion');
+  }
 }
 
 async function cobrarMesaCompleta() {
@@ -578,13 +584,27 @@ async function cobrarMesaCompleta() {
   setLoader(true);
   try {
     const res = await API.cobrarMesa(mesaId, [], 0, true);
-    ticketReturnToIndex = true;
-    const ticket = res.ticket || res.ticket_completo;
-    if (ticket) {
-      mostrarTicket(ticket, true);
+    
+    if (mesaRapida) {
+      // Mesa rápida: imprimir ticket y volver a index
+      ticketReturnToIndex = true;
+      const ticket = res.ticket || res.ticket_completo;
+      if (ticket) {
+        mostrarTicket(ticket, true);
+      } else {
+        mostrarToast('Mesa cobrada', 'success');
+        setTimeout(() => window.location.href = 'index.html', 1200);
+      }
     } else {
-      mostrarToast('Mesa cobrada completa', 'success');
-      setTimeout(() => window.location.href = 'index.html', 1200);
+      // Mesa normal: mostrar ticket para que usuario decida imprimir
+      ticketReturnToIndex = true;
+      const ticket = res.ticket || res.ticket_completo;
+      if (ticket) {
+        mostrarTicket(ticket, true);
+      } else {
+        mostrarToast('Mesa cobrada completa', 'success');
+        setTimeout(() => window.location.href = 'index.html', 1200);
+      }
     }
   } catch (err) {
     mostrarToast('Error al cobrar completa: ' + err.message, 'error');
@@ -736,7 +756,17 @@ function construirTicketPlainText(ticketHtml, destino) {
         if (celdas && celdas.length >= 2) {
           const ud = celdas[0].replace(/<td>|<\/td>/g, '').trim();
           const articulo = celdas[1].replace(/<td>|<\/td>/g, '').trim().substring(0, 25);
-          lines.push(pad(ud + 'x', 3) + ' ' + articulo);
+          let linea = pad(ud + 'x', 3) + ' ' + articulo;
+          
+          // Agregar comentario/notas si existe (tercera celda)
+          if (celdas.length >= 3) {
+            const notas = celdas[2].replace(/<td>|<\/td>/g, '').trim();
+            if (notas) {
+              linea += '\n' + '     ' + notas;
+            }
+          }
+          
+          lines.push(linea);
         }
       });
     }
@@ -970,6 +1000,95 @@ function imprimirEnIframe(html, callback) {
   }, 300);
 }
 
+// ============================================================
+// EVENT BINDING Y MANEJO DE SALIDA CON VALIDACIÓN DE NOMBRE
+// ============================================================
+
+function bindEventos() {
+  // Botón Salir
+  const btnSalir = document.getElementById('btnSalir');
+  if (btnSalir) {
+    btnSalir.addEventListener('click', () => {
+      salirMesa();
+    });
+  }
+
+  // Botón Guardar (solo para mesa normal)
+  const btnGuardar = document.getElementById('btnGuardar');
+  if (btnGuardar) {
+    if (!mesaRapida) {
+      btnGuardar.style.display = 'inline-flex';
+      btnGuardar.addEventListener('click', () => {
+        confirmarSalir();
+      });
+    } else {
+      btnGuardar.style.display = 'none';
+    }
+  }
+
+  // Botón Cobrar
+  const btnCobrar = document.getElementById('btnCobrar');
+  if (btnCobrar) {
+    btnCobrar.addEventListener('click', () => {
+      abrirCobrar();
+    });
+  }
+
+  // Enter en modal de nombre
+  const inputNombreMesa = document.getElementById('inputNombreMesa');
+  if (inputNombreMesa) {
+    inputNombreMesa.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        guardarMesaConNombre();
+      }
+    });
+  }
+
+  // Unload
+  window.addEventListener('beforeunload', handleUnload);
+}
+
+async function salirMesa() {
+  // Si hay artículos sin cobrar EN MESA NORMAL, pedir nombre
+  if (!mesaRapida && lineas && lineas.length > 0) {
+    abrirModal('modalNombreMesa');
+    const input = document.getElementById('inputNombreMesa');
+    if (input) {
+      input.value = document.getElementById('mesaNombre')?.textContent || '';
+      setTimeout(() => input.focus(), 100);
+    }
+  } else {
+    // Sin artículos o mesa rápida, salir directo
+    confirmarSalirCancelando();
+  }
+}
+
+async function guardarMesaConNombre() {
+  const input = document.getElementById('inputNombreMesa');
+  const nombre = input?.value?.trim();
+
+  if (!nombre) {
+    mostrarToast('Ingresa nombre para la mesa', 'warning');
+    return;
+  }
+
+  setLoader(true);
+  try {
+    // Actualizar nombre de mesa en DB
+    await API._fetch(`api/mesas.php?action=renombrar`, {
+      method: 'POST',
+      body: JSON.stringify({ id: mesaId, nombre })
+    });
+
+    cerrarModal('modalNombreMesa');
+    confirmarSalirCancelando();
+  } catch (err) {
+    mostrarToast('Error al guardar nombre: ' + err.message, 'error');
+  } finally {
+    setLoader(false);
+  }
+}
+
 function getTicketStyles(anchoPapel) {
   return `@page { size: ${anchoPapel}mm auto; margin: 2mm 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1026,30 +1145,6 @@ window.crearNuevaMesa = async function () {
   }
   };
   
-function bindEventos() {
-  const btnSalir = document.getElementById('btnSalir');
-  if (btnSalir) btnSalir.addEventListener('click', confirmarSalirCancelando);
-
-  const btnGuardar = document.getElementById('btnGuardar');
-  if (btnGuardar) {
-    if (mesaRapida) {
-      btnGuardar.textContent = '⚡ Cobrar y salir';
-      btnGuardar.classList.remove('btn-success');
-      btnGuardar.classList.add('btn-primary');
-      btnGuardar.addEventListener('click', cobrarMesaCompleta);
-    } else {
-      btnGuardar.addEventListener('click', confirmarSalir);
-    }
-  }
-
-  const btnCobrar = document.getElementById('btnCobrar');
-  if (btnCobrar) btnCobrar.addEventListener('click', abrirCobrar);
-
-  const busquedaInput = document.getElementById('busquedaNombre');
-  if (busquedaInput) {
-    busquedaInput.addEventListener('input', e => actualizarBusqueda(e.target.value));
-  }
-}
 
 function switchTab(tab) {
   const productosPanel = document.querySelector('.productos-panel');
