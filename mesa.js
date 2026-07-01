@@ -672,13 +672,80 @@ function construirTicketDestino(ticket) {
 }
 
 function enviarAImpresora(destino, ticketHtml) {
-  const ruta = obtenerRutaImpresora(destino);
-  const nombreDestino = destino === 1 ? 'BARRA' : (destino === 2 ? 'COCINA' : `DESTINO ${destino}`);
+  const nombreDestino = destino === '1' ? 'BARRA' : (destino === '2' ? 'COCINA' : `DESTINO ${destino}`);
+  const nombreImpresora = destino === '1' ? 'barra' : (destino === '2' ? 'cocina' : 'cobro');
   
-  console.log(`[IMPRESORA] Enviando a ${nombreDestino} (${ruta}):`, ticketHtml);
+  // Convertir HTML a texto plano para impresora
+  const ticketTexto = construirTicketPlainText(ticketHtml, nombreDestino);
   
-  // TODO: Integrar con API backend para enviar a impresora real
-  // Por ahora solo registra en consola
+  console.log(`[IMPRESORA] Enviando a ${nombreDestino} (${nombreImpresora})`);
+  
+  // Enviar a api/print.php con destino específico
+  fetch(PRINT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: ticketTexto,
+      printer: nombreImpresora
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      console.log(`✓ Ticket impreso en ${nombreDestino}`);
+    } else {
+      console.error(`✗ Error imprimiendo en ${nombreDestino}:`, data.error);
+    }
+  })
+  .catch(err => console.error(`✗ Error enviando a impresora ${nombreDestino}:`, err));
+}
+
+function construirTicketPlainText(ticketHtml, destino) {
+  const W = 32; // ancho chars para 80mm
+  const sep = '='.repeat(W);
+  const cent = s => s.length >= W ? s : ' '.repeat(Math.floor((W - s.length) / 2)) + s;
+  const pad  = (s, n) => String(s).padEnd(n);
+  
+  const lines = [];
+  lines.push(cent('COMANDA'));
+  lines.push(cent(`[${destino}]`));
+  lines.push(sep);
+  
+  // Extraer mesa del HTML
+  const mesaMatch = ticketHtml.match(/Mesa: (.+?)<\/div>/);
+  if (mesaMatch) {
+    lines.push(cent('Mesa: ' + mesaMatch[1]));
+  }
+  
+  // Extraer fecha
+  const fechaMatch = ticketHtml.match(/ticket-fecha">(.+?)<\/div>/);
+  if (fechaMatch) {
+    lines.push(cent(fechaMatch[1]));
+  }
+  
+  lines.push(sep);
+  
+  // Extraer líneas de la tabla
+  const lineasMatch = ticketHtml.match(/<tbody>(.+?)<\/tbody>/s);
+  if (lineasMatch) {
+    const tbody = lineasMatch[1];
+    const filas = tbody.match(/<tr>(.+?)<\/tr>/gs);
+    if (filas) {
+      filas.forEach(fila => {
+        const celdas = fila.match(/<td>(.+?)<\/td>/gs);
+        if (celdas && celdas.length >= 2) {
+          const ud = celdas[0].replace(/<td>|<\/td>/g, '').trim();
+          const articulo = celdas[1].replace(/<td>|<\/td>/g, '').trim().substring(0, 25);
+          lines.push(pad(ud + 'x', 3) + ' ' + articulo);
+        }
+      });
+    }
+  }
+  
+  lines.push(sep);
+  lines.push('');
+  
+  return lines.join('\n');
 }
 
 async function crearNuevaMesa() {
@@ -793,7 +860,7 @@ function cerrarTicket() {
   }
 }
 
-const PRINT_URL = 'http://localhost:9100';
+const PRINT_URL = 'api/print.php';
 
 function ticketToPlainText(ticket) {
   const W = 32; // ancho chars para 80mm
@@ -868,7 +935,7 @@ async function imprimirDirecto(html, callback, ticketData) {
   }
   const ticketText = ticketToPlainText(ticketData);
   try {
-    const resp = await fetch(`${PRINT_URL}/print`, {
+    const resp = await fetch(PRINT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: ticketText })
@@ -878,10 +945,11 @@ async function imprimirDirecto(html, callback, ticketData) {
       if (callback) callback();
       return;
     }
+    mostrarToast('Impresora: ' + (data.error || 'Error desconocido'), 'error', 8000);
   } catch (e) {
-    console.warn('Print listener no disponible, usando impresion del navegador');
+    mostrarToast('No se pudo conectar con el servidor de impresion. Comprueba la red.', 'error', 8000);
   }
-  imprimirEnIframe(html, callback);
+  if (callback) callback();
 }
 
 function imprimirEnIframe(html, callback) {

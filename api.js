@@ -104,8 +104,8 @@ let printListenerOK = null;
 async function checkPrintListener() {
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 1500);
-    const resp = await fetch('http://localhost:9100/ping', { signal: ctrl.signal });
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    const resp = await fetch('api/print.php?action=ping', { signal: ctrl.signal });
     clearTimeout(timer);
     if (resp.ok) { printListenerOK = true; return true; }
   } catch (e) { /* offline */ }
@@ -113,16 +113,10 @@ async function checkPrintListener() {
   return false;
 }
 
+// Print listener ya no necesario (impresora en red IP)
 async function ensurePrintListener() {
-  if (printListenerOK) return true;
-  const ok = await checkPrintListener();
-  if (ok) return true;
-  mostrarToast('Impresora offline. Abre iniciar_impresora.bat en drivers/', 'warning', 5000);
-  return false;
+  return true;
 }
-
-// Check al cargar pagina
-checkPrintListener();
 
 function mostrarToast(msg, tipo = 'info', duracion = 3000) {
   const container = document.getElementById('toastContainer');

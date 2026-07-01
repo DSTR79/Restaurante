@@ -13,6 +13,9 @@ let mesaCobrado = false;
 let reloadAfterTickets = false;
 let metodoPagoSeleccionado = null;
 
+// Impresora via relay PHP (funciona desde cualquier dispositivo de la red)
+const PRINT_URL = 'api/print.php';
+
 let mesasDisponibles = [];
 let mesaSeleccionadaExtra = null;
 let productosSeleccionadosExtra = {};
@@ -991,8 +994,6 @@ function cerrarTicket() {
   }
 }
 
-const PRINT_URL = 'http://localhost:9100';
-
 function ticketToPlainText(ticket) {
   const W = 32; // ancho chars para 80mm
   const sep = '='.repeat(W);
@@ -1082,7 +1083,7 @@ async function imprimirDirecto(html, callback, ticketData) {
   }
   const ticketText = ticketToPlainText(ticketData);
   try {
-    const resp = await fetch(`${PRINT_URL}/print`, {
+    const resp = await fetch(PRINT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: ticketText })
@@ -1092,11 +1093,11 @@ async function imprimirDirecto(html, callback, ticketData) {
       if (callback) callback();
       return;
     }
+    mostrarToast('Impresora: ' + (data.error || 'Error desconocido'), 'error', 8000);
   } catch (e) {
-    console.warn('Print listener no disponible, usando impresion del navegador');
+    mostrarToast('No se pudo conectar con el servidor de impresion. Comprueba la red.', 'error', 8000);
   }
-  // Fallback: usar window.print() via iframe oculto
-  imprimirEnIframe(html, callback);
+  if (callback) callback();
 }
 
 function imprimirEnIframe(html, callback) {
@@ -1119,19 +1120,21 @@ function imprimirEnIframe(html, callback) {
 
 function getTicketStyles(anchoPapel) {
   return `@page { size: ${anchoPapel}mm auto; margin: 2mm 0; }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: ${anchoPapel}mm; padding: 0; color: #000; background: #fff; }
-.ticket-nombre-bar { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 2px; line-height: 1.2; }
-.ticket-fecha, .ticket-mesa { text-align: center; font-size: 11px; color: #000; }
-.ticket-sep { text-align: center; margin: 4px 0; color: #000; font-size: 11px; }
+* { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
+body, .ticket-wrap { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: ${anchoPapel}mm; padding: 0; color: #000 !important; background: #fff; }
+.ticket-nombre-bar { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 2px; line-height: 1.2; color: #000 !important; }
+.ticket-fecha, .ticket-mesa { text-align: center; font-size: 11px; color: #000 !important; }
+.ticket-sep { text-align: center; margin: 4px 0; color: #000 !important; font-size: 11px; }
 .ticket-tabla { width: 100%; border-collapse: collapse; margin: 4px 0; }
-.ticket-tabla th { border-bottom: 1px solid #000; padding: 2px 2px; font-size: 10px; text-align: left; }
+.ticket-tabla th, .ticket-tabla td { color: #000 !important; }
+.ticket-tabla th { border-bottom: 1px solid #000; padding: 2px 2px; font-size: 10px; text-align: left; font-weight: bold; }
 .ticket-tabla th:last-child { text-align: right; }
 .ticket-tabla td { padding: 2px 2px; font-size: 11px; }
 .ticket-tabla td:last-child { text-align: right; }
-.ticket-total { font-size: 14px; font-weight: bold; text-align: right; margin-top: 4px; }
-.ticket-factura-num { text-align: left; font-size: 11px; color: #000; margin: 1px 0; }
-.ticket-gracias { text-align: center; margin-top: 8px; font-size: 10px; color: #000; }
+.ticket-total { font-size: 14px; font-weight: bold; text-align: right; margin-top: 4px; color: #000 !important; }
+.ticket-factura-num { text-align: left; font-size: 11px; color: #000 !important; margin: 1px 0; font-weight: bold; }
+.ticket-gracias { text-align: center; margin-top: 8px; font-size: 10px; color: #000 !important; }
+.ticket-titulo { text-align: center; font-size: 13px; font-weight: bold; color: #000 !important; }
 @media print { body { width: ${anchoPapel}mm; } }`;
 }
 

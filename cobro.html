@@ -160,8 +160,10 @@
   <div class="toast-container" id="toastContainer"></div>
   
   <div class="modal-overlay" id="modalTicket">
-    <div class="modal modal-ticket">
-      <div id="ticketContenido"></div>
+    <div class="modal modal-ticket" style="font-family:'Courier New',Courier,monospace;color:#000 !important;background:#fff;">
+      <div id="ticketContenido" style="color:#000 !important;">
+        <style>#modalTicket, #modalTicket * { color: #000 !important; }</style>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="cerrarTicket()">Cerrar</button>
         <button class="btn btn-primary" onclick="imprimirTicket()">🖨️ Imprimir</button>
